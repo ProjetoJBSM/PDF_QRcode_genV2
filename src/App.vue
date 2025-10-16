@@ -353,7 +353,25 @@
         <div v-if="templateInfo" class="template-info">
           {{ templateInfo }}
         </div>
-
+        <div class="config-actions">
+          <button 
+            type="button" 
+            class="secondary" 
+            @click="exportConfiguration"
+            title="Exportar todas as configurações do template"
+          >
+            📥 Exportar Configurações
+          </button>
+          <label class="secondary import-btn">
+            📤 Importar Configurações
+            <input 
+              type="file" 
+              accept=".json"
+              @change="importConfiguration"
+              style="display: none;"
+            />
+          </label>
+        </div>
         <div class="actions">
           <button class="primary" type="button" @click="startGeneration">
             {{ getGenerateButtonText() }}
@@ -558,6 +576,165 @@ const getGenerateButtonText = () => {
     return exportOption.value === 'single_pdf' 
       ? 'Gerar PDF Completo' 
       : 'Gerar Arquivo .ZIP'
+  }
+}
+// Export configuration to JSON file
+const exportConfiguration = () => {
+  try {
+    const config = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      pageSettings: {
+        pageSize: pageSize.value,
+        pageRotation: pageRotation.value,
+        customWidth: customW.value,
+        customHeight: customH.value,
+        backgroundColor: backgroundColor.value
+      },
+      qrSettings: {
+        qrSize: qrSize.value,
+        posX: posX.value,
+        posY: posY.value,
+        ecc: ecc.value,
+        margin: margin.value,
+        renderText: renderText.value,
+        fontSize: fontSize.value,
+        maxChars: maxChars.value,
+        qrColor: qrColor.value,
+        qrBackground: qrBackground.value
+      },
+      textFields: textFields.value.map(field => ({
+        text: field.text,
+        x: field.x,
+        y: field.y,
+        size: field.size,
+        fontFamily: field.fontFamily,
+        bold: field.bold,
+        italic: field.italic,
+        underline: field.underline,
+        color: field.color
+      })),
+      customFonts: customFonts.value.map(font => ({
+        name: font.name,
+        // Convert Uint8Array to base64 for JSON serialization
+        bytes: btoa(String.fromCharCode.apply(null, Array.from(font.bytes)))
+      })),
+      exportOption: exportOption.value
+    }
+
+    const json = JSON.stringify(config, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `qr-template-config-${Date.now()}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    
+    status.value = 'Configuração exportada com sucesso!'
+    setTimeout(() => {
+      status.value = ''
+    }, 3000)
+  } catch (err) {
+    console.error('Erro ao exportar configuração:', err)
+    status.value = 'Erro ao exportar configuração: ' + err.message
+  }
+}
+
+// Import configuration from JSON file
+const importConfiguration = async (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  try {
+    const text = await file.text()
+    const config = JSON.parse(text)
+
+    // Validate version (for future compatibility)
+    if (!config.version) {
+      throw new Error('Arquivo de configuração inválido: versão não encontrada')
+    }
+
+    // Restore page settings
+    if (config.pageSettings) {
+      pageSize.value = config.pageSettings.pageSize || 'A4'
+      pageRotation.value = config.pageSettings.pageRotation || 0
+      customW.value = config.pageSettings.customWidth || 595
+      customH.value = config.pageSettings.customHeight || 842
+      backgroundColor.value = config.pageSettings.backgroundColor || '#FFFFFF'
+    }
+
+    // Restore QR settings
+    if (config.qrSettings) {
+      qrSize.value = config.qrSettings.qrSize || 180
+      posX.value = config.qrSettings.posX || 60
+      posY.value = config.qrSettings.posY || 120
+      ecc.value = config.qrSettings.ecc || 'M'
+      margin.value = config.qrSettings.margin || 4
+      renderText.value = config.qrSettings.renderText || 'no'
+      fontSize.value = config.qrSettings.fontSize || 12
+      maxChars.value = config.qrSettings.maxChars || 64
+      qrColor.value = config.qrSettings.qrColor || '#000000'
+      qrBackground.value = config.qrSettings.qrBackground !== undefined ? config.qrSettings.qrBackground : true
+    }
+
+    // Restore text fields
+    if (config.textFields && Array.isArray(config.textFields)) {
+      textFields.value = config.textFields.map(field => ({
+        id: textFieldIdCounter++,
+        text: field.text || '',
+        x: field.x || 100,
+        y: field.y || 200,
+        size: field.size || 14,
+        fontFamily: field.fontFamily || 'Helvetica',
+        bold: field.bold || false,
+        italic: field.italic || false,
+        underline: field.underline || false,
+        color: field.color || '#000000'
+      }))
+    }
+
+    // Restore custom fonts
+    if (config.customFonts && Array.isArray(config.customFonts)) {
+      customFonts.value = []
+      for (const font of config.customFonts) {
+        try {
+          // Convert base64 back to Uint8Array
+          const binaryString = atob(font.bytes)
+          const bytes = new Uint8Array(binaryString.length)
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i)
+          }
+          
+          customFonts.value.push({
+            name: font.name,
+            bytes: bytes
+          })
+        } catch (fontErr) {
+          console.error(`Erro ao carregar fonte ${font.name}:`, fontErr)
+        }
+      }
+    }
+
+    // Restore export option
+    if (config.exportOption) {
+      exportOption.value = config.exportOption
+    }
+
+    // Clear file input
+    event.target.value = ''
+
+    status.value = 'Configuração importada com sucesso!'
+    setTimeout(() => {
+      status.value = ''
+    }, 3000)
+  } catch (err) {
+    console.error('Erro ao importar configuração:', err)
+    status.value = 'Erro ao importar configuração: ' + err.message
+    event.target.value = ''
   }
 }
 
@@ -1369,6 +1546,47 @@ button.secondary:hover {
   flex-wrap: wrap;
 }
 
+button.secondary {
+  background-color: #6c757d;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+button.secondary:hover {
+  background-color: #5a6268;
+}
+
+.import-btn {
+  background-color: #28a745;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+  display: inline-block;
+  margin: 0;
+}
+
+.import-btn:hover {
+  background-color: #218838;
+}
+
+.config-actions {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
 /* Preview Section - Sticky */
 .preview-section {
   position: sticky;
@@ -1517,6 +1735,46 @@ textarea {
   min-width: 0;
 }
 
+button.secondary {
+  background-color: #6c757d;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+button.secondary:hover {
+  background-color: #5a6268;
+}
+
+.import-btn {
+  background-color: #28a745;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+  display: inline-block;
+  margin: 0;
+}
+
+.import-btn:hover {
+  background-color: #218838;
+}
+
+.config-actions {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
 /* Rotate button - aligned to right */
 .template-rotate {
   flex-shrink: 0;
