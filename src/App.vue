@@ -9,29 +9,68 @@
       <form @submit.prevent class="form-section">
       <fieldset>
         <legend>Dados</legend>
-        <label>
-          URL
-          <textarea
-            v-model="urls"
-            placeholder="https://example.com/one"
-          ></textarea>
-        </label> 
-
-        <div class="data-source-separator">
-          <span>OU</span>
+        
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+          <button 
+            type="button" 
+            class="tab-button" 
+            :class="{ active: activeTab === 'manual' }"
+            @click="activeTab = 'manual'"
+          >
+            Geração Manual
+          </button>
+          <button 
+            type="button" 
+            class="tab-button" 
+            :class="{ active: activeTab === 'batch' }"
+            @click="activeTab = 'batch'"
+          >
+            Geração em Batch
+          </button>
         </div>
 
-        <label class="template-control template-file">
-          Carregar URLs via arquivo CSV
-          <input
-            type="file"
-            accept=".csv"
-            @change="handleCsvUpload"
-          />
-          <span v-if="csvFileName" class="csv-info small">
-            Arquivo carregado: <strong>{{ csvFileName }}</strong> ({{ csvData.length }} URLs encontradas)
-          </span>
-        </label>
+        <!-- Manual Generation Tab -->
+        <div v-show="activeTab === 'manual'" class="tab-content">
+          <label>
+            Conteúdo do QR Code
+            <textarea
+              v-model="manualInput"
+              placeholder="Digite a URL ou texto para o QR Code&#10;Exemplo: https://example.com"
+              rows="3"
+            ></textarea>
+          </label>
+          <p class="small" style="margin-top: 0.5rem; color: #666;">
+            Insira uma URL ou texto para gerar um único QR Code. Será gerado um PDF de uma página.
+          </p>
+        </div>
+
+        <!-- Batch Generation Tab -->
+        <div v-show="activeTab === 'batch'" class="tab-content">
+          <label class="template-control template-file">
+            Carregar arquivo CSV
+            <input
+              type="file"
+              accept=".csv"
+              @change="handleCsvUpload"
+            />
+            <span v-if="csvFileName" class="csv-info small">
+              Arquivo carregado: <strong>{{ csvFileName }}</strong> ({{ csvData.length }} URLs encontradas)
+            </span>
+          </label>
+          <p class="small" style="margin-top: 0.5rem; color: #666;">
+            O arquivo CSV deve ter uma coluna chamada <strong>"valor"</strong> com as URLs/textos.<br>
+            Para gerar ZIP com nomes personalizados, adicione também a coluna <strong>"nome_arquivo"</strong>.
+          </p>
+          
+          <label class="export-option-label" style="margin-top: 1rem;">
+            Formato de Saída
+            <select v-model="exportOption">
+              <option value="single_pdf">PDF Único com várias páginas</option>
+              <option value="multiple_pdfs_zip">ZIP com um PDF por página</option>
+            </select>
+          </label>
+        </div>
         
         <div class="template-controls-row">
           <label class="template-control template-file">
@@ -76,62 +115,89 @@
       </fieldset>
 
       <fieldset>
-        <legend>Posicionamento do QR</legend>
-        <div class="qr-controls-row">
-          <label class="qr-control qr-size">
-            Tamanho do QR (pt)
-            <input v-model.number="qrSize" type="number" min="30" />
-          </label>
-          <label class="qr-control qr-position">
-            Esquerda (pt da borda esquerda)
-            <input v-model.number="posX" type="number" min="0" />
-          </label>
-          <label class="qr-control qr-position">
-            Topo (pt do topo da página)
-            <input v-model.number="posY" type="number" min="0" />
-          </label>
-          <label class="qr-control qr-ecc">
-            Nível ECC
-            <select v-model="ecc">
-              <option value="L">L (7%)</option>
-              <option value="M">M (15%)</option>
-              <option value="Q">Q (25%)</option>
-              <option value="H">H (30%)</option>
-            </select>
-          </label>
-          <label class="qr-control qr-margin">
-            Zona quieta (módulos)
-            <input v-model.number="margin" type="number" min="0" />
-          </label>
+        <legend>Configurações do QR Code</legend>
+        
+        <!-- Basic QR Settings - Always Visible -->
+        <div class="qr-basic-settings">
+          <div class="qr-controls-row">
+            <label class="qr-control qr-size">
+              Tamanho do QR (pt)
+              <input v-model.number="qrSize" type="number" min="30" />
+            </label>
+            <label class="qr-control qr-position">
+              Posição X - Esquerda (pt)
+              <input v-model.number="posX" type="number" min="0" />
+            </label>
+            <label class="qr-control qr-position">
+              Posição Y - Topo (pt)
+              <input v-model.number="posY" type="number" min="0" />
+            </label>
+            <label class="qr-text-control qr-color">
+              Cor do QR Code
+              <input v-model="qrColor" type="color" />
+            </label>
+            <label class="qr-text-control qr-checkbox-wrapper">
+              <span class="checkbox-label-text">Fundo branco</span>
+              <input v-model="qrBackground" type="checkbox" class="qr-checkbox" />
+            </label>
+          </div>
+          <p class="small" style="margin-top: 0.5rem;">
+            Dica: 72 pt ≈ 1 polegada; 1 mm ≈ 2.835 pt. A4 = 595×842 pt.
+          </p>
         </div>
-        <div class="qr-text-controls-row">
-          <label class="qr-text-control qr-render-text">
-            Renderizar texto da URL sob o QR?
-            <select v-model="renderText">
-              <option value="no">Não</option>
-              <option value="yes">Sim</option>
-            </select>
-          </label>
-          <label class="qr-text-control qr-font-size">
-            Tamanho da fonte do texto (pt)
-            <input v-model.number="fontSize" type="number" min="6" />
-          </label>
-          <label class="qr-text-control qr-max-chars">
-            Máx. caracteres da URL (reticências)
-            <input v-model.number="maxChars" type="number" min="10" />
-          </label>
-          <label class="qr-text-control qr-color">
-            Cor do QR Code
-            <input v-model="qrColor" type="color" />
-          </label>
-          <label class="qr-text-control qr-checkbox-wrapper">
-            <span class="checkbox-label-text">Fundo branco</span>
-            <input v-model="qrBackground" type="checkbox" class="qr-checkbox" />
-          </label>
+
+        <!-- Advanced Settings Toggle Button -->
+        <div class="advanced-toggle">
+          <button 
+            type="button" 
+            class="advanced-toggle-btn" 
+            @click="showAdvancedQR = !showAdvancedQR"
+          >
+            {{ showAdvancedQR ? '▼' : '▶' }} Configurações Avançadas
+          </button>
         </div>
-        <p class="small">
-          Dica: O espaço do usuário PDF é em pontos (pt). 72 pt ≈ 1 polegada; 1 mm ≈ 2.835 pt. A4 = 595×842 pt.
-        </p>
+
+        <!-- Advanced QR Settings - Collapsible -->
+        <div v-show="showAdvancedQR" class="qr-advanced-settings">
+          <div class="qr-controls-row">
+            <label class="qr-control qr-ecc">
+              Nível ECC (Correção de Erros)
+              <select v-model="ecc">
+                <option value="L">L - Baixo (7%)</option>
+                <option value="M">M - Médio (15%)</option>
+                <option value="Q">Q - Alto (25%)</option>
+                <option value="H">H - Muito Alto (30%)</option>
+              </select>
+            </label>
+            <label class="qr-control qr-margin">
+              Zona quieta (módulos)
+              <input v-model.number="margin" type="number" min="0" />
+            </label>
+          </div>
+          
+          <div class="qr-text-controls-row">
+            <label class="qr-text-control qr-render-text">
+              Renderizar texto da URL sob o QR?
+              <select v-model="renderText">
+                <option value="no">Não</option>
+                <option value="yes">Sim</option>
+              </select>
+            </label>
+            <label class="qr-text-control qr-font-size">
+              Tamanho da fonte do texto (pt)
+              <input v-model.number="fontSize" type="number" min="6" />
+            </label>
+            <label class="qr-text-control qr-max-chars">
+              Máx. caracteres da URL
+              <input v-model.number="maxChars" type="number" min="10" />
+            </label>
+          </div>
+          
+          <p class="small" style="margin-top: 0.75rem; color: #666;">
+            <strong>ECC (Error Correction Level):</strong> Quanto maior o nível, mais o QR Code pode ser danificado e ainda ser lido.<br>
+            <strong>Zona quieta:</strong> Margem branca ao redor do QR Code (recomendado: 4 módulos).
+          </p>
+        </div>
       </fieldset>
 
       <fieldset>
@@ -238,7 +304,7 @@
 
         <div class="upload-font">
           <label class="upload-font-btn">
-            📁 Carregar Arquivo .ttf/.otf
+            Carregar Arquivo .ttf/.otf
             <input 
               type="file" 
               accept=".ttf,.otf" 
@@ -249,11 +315,11 @@
         </div>
 
         <div v-if="fontLoading" class="font-loading">
-          <span class="small">⏳ Carregando fonte...</span>
+          <span class="small">Carregando fonte...</span>
         </div>
 
         <div v-if="fontLoadError" class="font-error">
-          <span class="small">⚠️ {{ fontLoadError }}</span>
+          <span class="small">{{ fontLoadError }}</span>
         </div>
 
         <div v-if="customFonts.length > 0" class="custom-fonts-list">
@@ -266,7 +332,7 @@
             class="custom-font-item"
           >
             <span class="font-name">
-              📄 {{ font.name }}
+              {{ font.name }}
             </span>
             <button 
               type="button" 
@@ -289,15 +355,8 @@
         </div>
 
         <div class="actions">
-          <label class="export-option-label">
-            Formato de Saída
-            <select v-model="exportOption">
-              <option value="single_pdf">PDF Único com várias páginas</option>
-              <option value="multiple_pdfs_zip">ZIP com um PDF por página</option>
-            </select>
-          </label>
           <button class="primary" type="button" @click="startGeneration">
-            {{ exportOption === 'single_pdf' ? 'Gerar PDF Completo' : 'Gerar Arquivo .ZIP' }}
+            {{ getGenerateButtonText() }}
           </button>
           <a
             v-if="downloadUrl"
@@ -352,7 +411,9 @@ const QR_CORRECT_LEVEL = { L: 1, M: 0, Q: 3, H: 2 }
 let previewTimeout = null
 
 // Data refs
-const urls = ref('')
+const activeTab = ref('manual') // 'manual' or 'batch'
+const manualInput = ref('') // Input for manual generation
+const urls = ref('') // Kept for backward compatibility with batch
 const csvData = ref([]) //teste de correcao
 const csvFileName = ref('')
 const pageSize = ref('A4')
@@ -398,6 +459,9 @@ const downloadUrl = ref('')
 const urlCount = ref(0)
 const status = ref('')
 const previewUrl = ref('')
+
+// UI state
+const showAdvancedQR = ref(false)
 
 // Hidden QR holder
 const qrHolder = ref(null)
@@ -477,14 +541,27 @@ const removeCustomFont = (index) => {
   })
 }
 
+// Get generate button text based on active tab and export option
+const getGenerateButtonText = () => {
+  if (activeTab.value === 'manual') {
+    return 'Gerar QR Code'
+  } else {
+    return exportOption.value === 'single_pdf' 
+      ? 'Gerar PDF Completo' 
+      : 'Gerar Arquivo .ZIP'
+  }
+}
+
 //processar arquivo CSV
 const handleCsvUpload = (event) => {
   const file = event.target.files?.[0]
   if (!file) return
 
+  manualInput.value = '' // Limpa o input manual
   urls.value = '' // Limpa o textarea para evitar confusão
   csvData.value = []
   csvFileName.value = ''
+  status.value = ''
 
   Papa.parse(file, {
     header: true,
@@ -493,6 +570,9 @@ const handleCsvUpload = (event) => {
       if (results.data && results.meta.fields.includes('valor')) {
         csvData.value = results.data.filter(row => row.valor && row.valor.trim() !== '');
         csvFileName.value = file.name
+        
+        // Automatically switch to batch tab
+        activeTab.value = 'batch'
 
         // Força a atualização da pré-visualização com a primeira URL do CSV
         if (csvData.value.length > 0) {
@@ -500,11 +580,11 @@ const handleCsvUpload = (event) => {
         }
 
       } else {
-        status.value = 'Erro: O CSV precisa ter uma coluna chamada "valor".'
+        status.value = '⚠️ Erro: O CSV precisa ter uma coluna chamada "valor".'
       }
     },
     error: (err) => {
-      status.value = 'Erro ao ler o CSV: ' + err.message
+      status.value = '⚠️ Erro ao ler o CSV: ' + err.message
     }
   })
 }
@@ -571,7 +651,10 @@ const getPageDimensions = () => {
 watchEffect(() => {
   // Watch all reactive values
   const deps = [
+    manualInput.value,
     urls.value,
+    activeTab.value,
+    csvData.value.length,
     pageSize.value,
     pageRotation.value,
     customW.value,
@@ -610,19 +693,21 @@ const generatePreview = async () => {
       previewUrl.value = ''
     }
 
-    //para suportar CSV
     let urlList = []
-    if (csvData.value.length > 0) {
-      // Pega as URLs do CSV
-      urlList = csvData.value.map(item => item.valor)
+    
+    // Decide qual fonte de dados usar com base na aba ativa
+    if (activeTab.value === 'manual') {
+      // Modo manual: usa o input manual
+      const input = manualInput.value.trim()
+      if (input) {
+        urlList = [input]
+      }
     } else {
-      // Senão, pega as URLs do textarea
-      urlList = urls.value
-        .split(/\r?\n/)
-        .map((s) => s.trim())
-        .filter(Boolean)
+      // Modo batch: usa CSV
+      if (csvData.value.length > 0) {
+        urlList = csvData.value.map(item => item.valor)
+      }
     }
-    //continuação normal
 
     if (urlList.length === 0) {
       // Don't show error, just return
@@ -737,31 +822,35 @@ const generatePreview = async () => {
 
 //funcao para organizar a geracao do PDF
 const startGeneration = async () => {
-  status.value = 'Iniciando...'
+  status.value = '⏳ Iniciando...'
   downloadUrl.value = ''
 
-  // Decide qual especialista chamar com base na opção do usuário
-  if (exportOption.value === 'single_pdf') {
-    let urlList = [];
-    if (csvData.value.length > 0) {
-      // Extrai APENAS as URLs para a função de PDF único
-      urlList = csvData.value.map(item => item.valor);
-    } else {
-      urlList = urls.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  // Lógica diferente para cada aba
+  if (activeTab.value === 'manual') {
+    // Modo manual: gera sempre um PDF único com uma página
+    const input = manualInput.value.trim();
+    
+    if (!input) {
+      status.value = 'Erro: Insira um conteúdo para o QR Code.';
+      return;
     }
     
-    if (urlList.length === 0) {
-      status.value = 'Erro: Nenhuma URL fornecida.';
-      return;
-    }
-    // Chama a função antiga com a lista simples de URLs
-    await generateSinglePDF(urlList);
-  } else if (exportOption.value === 'multiple_pdfs_zip') {
+    // Sempre gera um PDF único no modo manual
+    await generateSinglePDF([input]);
+  } else {
+    // Modo batch: usa CSV e respeita a opção de exportação
     if (csvData.value.length === 0) {
-      status.value = 'Erro: Para gerar um ZIP, por favor, carregue um arquivo CSV com a coluna "nome_arquivo".';
+      status.value = 'Erro: Carregue um arquivo CSV para geração em batch.';
       return;
     }
-    await generateZipWithMultiplePDFs(csvData.value);
+
+    if (exportOption.value === 'single_pdf') {
+      // Extrai APENAS as URLs para a função de PDF único
+      const urlList = csvData.value.map(item => item.valor);
+      await generateSinglePDF(urlList);
+    } else if (exportOption.value === 'multiple_pdfs_zip') {
+      await generateZipWithMultiplePDFs(csvData.value);
+    }
   }
 }
 
@@ -828,8 +917,8 @@ const generateSinglePDF = async (urlList) => {
     const blob = new Blob([pdfBytes], { type: 'application/pdf' })
     const url = URL.createObjectURL(blob)
     downloadUrl.value = url
-    urlCount.value = dataList.length
-    status.value = 'Concluído.'
+    urlCount.value = urlList.length
+    status.value = '✅ Concluído.'
 
     setTimeout(() => {
       const a = document.createElement('a'); a.href = url; a.download = 'qrs.pdf';
@@ -906,7 +995,7 @@ const generateZipWithMultiplePDFs = async (dataList) => {
     const url = URL.createObjectURL(content)
     downloadUrl.value = url
     urlCount.value = dataList.length
-    status.value = 'Concluído.'
+    status.value = '✅ Concluído.'
 
     setTimeout(() => {
       const a = document.createElement('a'); a.href = url; a.download = 'qrs.zip';
@@ -1928,5 +2017,180 @@ input[type="color"] {
   color: #555;
   flex: 1;
   min-width: 200px;
+}
+
+/* Tab Navigation Styles */
+.tab-navigation {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.tab-button {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #666;
+  font-weight: 500;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  bottom: -2px;
+}
+
+.tab-button:hover {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.tab-button.active {
+  color: #0066cc;
+  border-bottom-color: #0066cc;
+  background: #f0f8ff;
+  font-weight: 600;
+}
+
+.tab-content {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Enhanced CSV Info */
+.csv-info {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  display: block;
+  color: #0066cc;
+  background-color: #e7f3ff;
+  border-left: 4px solid #0066cc;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+/* Template file styling for batch tab */
+.tab-content .template-control {
+  margin-top: 0;
+}
+
+.tab-content .template-file input[type="file"] {
+  cursor: pointer;
+}
+
+.tab-content .template-file input[type="file"]::-webkit-file-upload-button {
+  background-color: #0066cc;
+  color: white;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.tab-content .template-file input[type="file"]::-webkit-file-upload-button:hover {
+  background-color: #0052a3;
+}
+
+/* Manual tab textarea styling */
+.tab-content textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* QR Code Settings - Basic and Advanced */
+.qr-basic-settings {
+  margin-bottom: 0.5rem;
+}
+
+.advanced-toggle {
+  margin: 0.75rem 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.advanced-toggle::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, #ddd, transparent);
+}
+
+.advanced-toggle-btn {
+  background: none;
+  border: none;
+  padding: 0.25rem 0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #6c757d;
+  text-align: left;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.advanced-toggle-btn:hover {
+  color: #495057;
+}
+
+.advanced-toggle-btn:active {
+  color: #0066cc;
+}
+
+.qr-advanced-settings {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background-color: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  animation: expandDown 0.3s ease-out;
+}
+
+@keyframes expandDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive adjustments for QR controls */
+@media (max-width: 768px) {
+  .qr-controls-row {
+    flex-wrap: wrap;
+  }
+  
+  .qr-control {
+    min-width: calc(50% - 0.375rem);
+  }
+  
+  .qr-text-controls-row {
+    flex-wrap: wrap;
+  }
+  
+  .qr-text-control {
+    min-width: calc(50% - 0.375rem);
+  }
 }
 </style>
