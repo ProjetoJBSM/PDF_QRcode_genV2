@@ -14,6 +14,7 @@
           <textarea
             v-model="urls"
             placeholder="https://example.com/one"
+            :disabled="csvData.length>0"
           ></textarea>
         </label> 
 
@@ -27,9 +28,14 @@
             type="file"
             accept=".csv"
             @change="handleCsvUpload"
+            ref="csvFileInput" 
           />
           <span v-if="csvFileName" class="csv-info small">
             Arquivo carregado: <strong>{{ csvFileName }}</strong> ({{ csvData.length }} URLs encontradas)
+
+            <button type="button" @click.prevent="clearCsvData" class="remove-csv-btn">
+              Remover
+            </button>
           </span>
         </label>
         
@@ -307,24 +313,41 @@
           </label>
         </div>
         <div class="actions">
-          <label class="export-option-label">
-            Formato de Saída
-            <select v-model="exportOption">
-              <option value="single_pdf">PDF Único com várias páginas</option>
-              <option value="multiple_pdfs_zip">ZIP com um PDF por página</option>
-            </select>
-          </label>
-          <button class="primary" type="button" @click="startGeneration">
-            {{ exportOption === 'single_pdf' ? 'Gerar PDF Completo' : 'Gerar Arquivo .ZIP' }}
-          </button>
-          <a
-            v-if="downloadUrl"
-            :href="downloadUrl"
-            :download="exportOption === 'single_pdf' ? 'qrs.pdf' : 'qrs.zip'"
-          >
-            Download {{ exportOption === 'single_pdf' ? 'PDF' : 'ZIP' }} ({{ urlCount }} {{ urlCount > 1 ? 'páginas' : 'página' }}/arquivos)
-          </a>
-          <span class="small">{{ status }}</span>
+          <div v-if="csvData.length === 0" class="actions-simple">
+            <button v-if="!downloadUrl" class="primary" type="button" @click="startGeneration">
+              Gerar PDF Completo
+            </button>
+            
+            <a
+              v-else
+              :href="downloadUrl"
+              download="qrs.pdf"
+              class="button-as-link primary"
+            >
+              Baixar PDF ({{ urlCount }} {{ urlCount > 1 ? 'páginas' : 'página' }})
+            </a>
+          </div>
+
+          <div v-else class="actions-advanced">
+            <label class="export-option-label">
+              Formato de Saída
+              <select v-model="exportOption">
+                <option value="single_pdf">PDF Único com várias páginas</option>
+                <option value="multiple_pdfs_zip">ZIP com um PDF por página</option>
+              </select>
+            </label>
+            <button class="primary" type="button" @click="startGeneration">
+              {{ exportOption === 'single_pdf' ? 'Gerar PDF Completo' : 'Gerar Arquivo .ZIP' }}
+            </button>
+            <a
+              v-if="downloadUrl"
+              :href="downloadUrl"
+              :download="exportOption === 'single_pdf' ? 'qrs.pdf' : 'qrs.zip'"
+            >
+              Download {{ exportOption === 'single_pdf' ? 'PDF' : 'ZIP' }} ({{ urlCount }} {{ urlCount > 1 ? 'páginas' : 'página' }}/arquivos)
+            </a>
+            <span class="small">{{ status }}</span>
+          </div>
         </div>
       </form>
 
@@ -378,6 +401,15 @@ const pageRotation = ref(0) // 0, 90, 180, 270
 const customW = ref(595)
 const customH = ref(842)
 const backgroundColor = ref('#FFFFFF')
+
+watch(urls, (newUrls) => { //limpa o CSV se o usuario digitar no text area
+  if (newUrls && newUrls.length > 0 && csvData.value.length > 0) {
+    csvData.value = [];
+    csvFileName.value = '';
+    //reseta a opção de exportação para o padrão
+    exportOption.value = 'single_pdf';
+  }
+});
 
 // QR placement refs
 const qrSize = ref(180)
@@ -660,6 +692,10 @@ const handleCsvUpload = (event) => {
   const file = event.target.files?.[0]
   if (!file) return
 
+  //para zerar a contagem de pag por arquivo
+  downloadUrl.value = '';
+  urlCount.value = 0;
+
   urls.value = '' // Limpa o textarea para evitar confusão
   csvData.value = []
   csvFileName.value = ''
@@ -686,6 +722,24 @@ const handleCsvUpload = (event) => {
     }
   })
 }
+
+//para limpar o espaço do csv
+const csvFileInput = ref(null); // Adicione esta ref no topo do script junto com as outras
+const clearCsvData = () => {
+
+  //para limpar os dados do CSV e resetar o botao
+  downloadUrl.value = '';
+  urlCount.value = 0;
+
+  csvData.value = [];
+  csvFileName.value = '';
+  exportOption.value = 'single_pdf';
+  
+  // Limpa o valor do input de arquivo para que o usuário possa carregar o mesmo arquivo novamente
+  if (csvFileInput.value) {
+    csvFileInput.value.value = null;
+  }
+};
 
 // Handle template file upload
 const handleTemplateFile = async (event) => {
@@ -1006,7 +1060,7 @@ const generateSinglePDF = async (urlList) => {
     const blob = new Blob([pdfBytes], { type: 'application/pdf' })
     const url = URL.createObjectURL(blob)
     downloadUrl.value = url
-    urlCount.value = dataList.length
+    urlCount.value = urlList.length
     status.value = 'Concluído.'
 
     setTimeout(() => {
@@ -2147,5 +2201,36 @@ input[type="color"] {
   color: #555;
   flex: 1;
   min-width: 200px;
+}
+
+.remove-csv-btn {
+  background: none;
+  border: 1px solid #dc3545;
+  color: #dc3545;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 0.5rem;
+  transition: all 0.2s;
+}
+.remove-csv-btn:hover {
+  background: #dc3545;
+  color: white;
+}
+
+.actions-simple, .actions-advanced {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+/* Classe para fazer o link de download parecer um botão */
+.button-as-link {
+  display: inline-block;
+  text-decoration: none;
+  text-align: center;
 }
 </style>
