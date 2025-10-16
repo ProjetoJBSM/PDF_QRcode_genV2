@@ -422,6 +422,15 @@ const customW = ref(595)
 const customH = ref(842)
 const backgroundColor = ref('#FFFFFF')
 
+watch(urls, (newUrls) => { //limpa o CSV se o usuario digitar no text area
+  if (newUrls && newUrls.length > 0 && csvData.value.length > 0) {
+    csvData.value = [];
+    csvFileName.value = '';
+    //reseta a opção de exportação para o padrão
+    exportOption.value = 'single_pdf';
+  }
+});
+
 // QR placement refs
 const qrSize = ref(180)
 const posX = ref(60)
@@ -588,6 +597,24 @@ const handleCsvUpload = (event) => {
     }
   })
 }
+
+//para limpar o espaço do csv
+const csvFileInput = ref(null); // Adicione esta ref no topo do script junto com as outras
+const clearCsvData = () => {
+
+  //para limpar os dados do CSV e resetar o botao
+  downloadUrl.value = '';
+  urlCount.value = 0;
+
+  csvData.value = [];
+  csvFileName.value = '';
+  exportOption.value = 'single_pdf';
+  
+  // Limpa o valor do input de arquivo para que o usuário possa carregar o mesmo arquivo novamente
+  if (csvFileInput.value) {
+    csvFileInput.value.value = null;
+  }
+};
 
 // Handle template file upload
 const handleTemplateFile = async (event) => {
@@ -1299,6 +1326,47 @@ button.primary {
 
 button.primary:hover {
   background-color: #0052a3;
+}
+
+button.secondary {
+  background-color: #6c757d;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+button.secondary:hover {
+  background-color: #5a6268;
+}
+
+.import-btn {
+  background-color: #28a745;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+  display: inline-block;
+  margin: 0;
+}
+
+.import-btn:hover {
+  background-color: #218838;
+}
+
+.config-actions {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
 }
 
 /* Preview Section - Sticky */
