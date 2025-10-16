@@ -15,6 +15,22 @@
             v-model="urls"
             placeholder="https://example.com/one"
           ></textarea>
+        </label> 
+
+        <div class="data-source-separator">
+          <span>OU</span>
+        </div>
+
+        <label class="template-control template-file">
+          Carregar URLs via arquivo CSV
+          <input
+            type="file"
+            accept=".csv"
+            @change="handleCsvUpload"
+          />
+          <span v-if="csvFileName" class="csv-info small">
+            Arquivo carregado: <strong>{{ csvFileName }}</strong> ({{ csvData.length }} URLs encontradas)
+          </span>
         </label>
         
         <div class="template-controls-row">
@@ -273,15 +289,22 @@
         </div>
 
         <div class="actions">
-          <button class="primary" type="button" @click="generatePDF">
-            Gerar PDF Completo
+          <label class="export-option-label">
+            Formato de Saída
+            <select v-model="exportOption">
+              <option value="single_pdf">PDF Único com várias páginas</option>
+              <option value="multiple_pdfs_zip">ZIP com um PDF por página</option>
+            </select>
+          </label>
+          <button class="primary" type="button" @click="startGeneration">
+            {{ exportOption === 'single_pdf' ? 'Gerar PDF Completo' : 'Gerar Arquivo .ZIP' }}
           </button>
           <a
             v-if="downloadUrl"
             :href="downloadUrl"
-            download="qrs.pdf"
+            :download="exportOption === 'single_pdf' ? 'qrs.pdf' : 'qrs.zip'"
           >
-            Download PDF ({{ urlCount }} páginas)
+            Download {{ exportOption === 'single_pdf' ? 'PDF' : 'ZIP' }} ({{ urlCount }} {{ urlCount > 1 ? 'páginas' : 'página' }}/arquivos)
           </a>
           <span class="small">{{ status }}</span>
         </div>
@@ -316,6 +339,8 @@
 import { ref, watch, watchEffect } from 'vue'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
+import Papa from 'papaparse'
+import JSZip from 'jszip'
 
 // Algumas builds do pacote 'qrcodejs' (npm) não expõem a propriedade "CorrectLevel".
 // Definimos manualmente o mapeamento de níveis ECC conforme implementação original:
@@ -328,6 +353,8 @@ let previewTimeout = null
 
 // Data refs
 const urls = ref('')
+const csvData = ref([]) //teste de correcao
+const csvFileName = ref('')
 const pageSize = ref('A4')
 const pageRotation = ref(0) // 0, 90, 180, 270
 const customW = ref(595)
@@ -359,6 +386,7 @@ const state = ref({
 // Text fields state
 const textFields = ref([])
 let textFieldIdCounter = 0
+const exportOption = ref('single_pdf') //para o batch
 
 // Custom fonts state
 const customFonts = ref([])
@@ -445,6 +473,38 @@ const removeCustomFont = (index) => {
   textFields.value.forEach(field => {
     if (field.fontFamily === fontName) {
       field.fontFamily = 'Helvetica'
+    }
+  })
+}
+
+//processar arquivo CSV
+const handleCsvUpload = (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  urls.value = '' // Limpa o textarea para evitar confusão
+  csvData.value = []
+  csvFileName.value = ''
+
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: (results) => {
+      if (results.data && results.meta.fields.includes('valor')) {
+        csvData.value = results.data.filter(row => row.valor && row.valor.trim() !== '');
+        csvFileName.value = file.name
+
+        // Força a atualização da pré-visualização com a primeira URL do CSV
+        if (csvData.value.length > 0) {
+          generatePreview()
+        }
+
+      } else {
+        status.value = 'Erro: O CSV precisa ter uma coluna chamada "valor".'
+      }
+    },
+    error: (err) => {
+      status.value = 'Erro ao ler o CSV: ' + err.message
     }
   })
 }
@@ -550,10 +610,19 @@ const generatePreview = async () => {
       previewUrl.value = ''
     }
 
-    const urlList = urls.value
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean)
+    //para suportar CSV
+    let urlList = []
+    if (csvData.value.length > 0) {
+      // Pega as URLs do CSV
+      urlList = csvData.value.map(item => item.valor)
+    } else {
+      // Senão, pega as URLs do textarea
+      urlList = urls.value
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    }
+    //continuação normal
 
     if (urlList.length === 0) {
       // Don't show error, just return
@@ -666,68 +735,64 @@ const generatePreview = async () => {
   }
 }
 
-// Generate PDF
-const generatePDF = async () => {
-  try {
-    status.value = 'Gerando…'
-    downloadUrl.value = ''
+//funcao para organizar a geracao do PDF
+const startGeneration = async () => {
+  status.value = 'Iniciando...'
+  downloadUrl.value = ''
 
-    const urlList = urls.value
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-
+  // Decide qual especialista chamar com base na opção do usuário
+  if (exportOption.value === 'single_pdf') {
+    let urlList = [];
+    if (csvData.value.length > 0) {
+      // Extrai APENAS as URLs para a função de PDF único
+      urlList = csvData.value.map(item => item.valor);
+    } else {
+      urlList = urls.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    }
+    
     if (urlList.length === 0) {
-      throw new Error('Por favor, cole pelo menos uma URL.')
+      status.value = 'Erro: Nenhuma URL fornecida.';
+      return;
+    }
+    // Chama a função antiga com a lista simples de URLs
+    await generateSinglePDF(urlList);
+  } else if (exportOption.value === 'multiple_pdfs_zip') {
+    if (csvData.value.length === 0) {
+      status.value = 'Erro: Para gerar um ZIP, por favor, carregue um arquivo CSV com a coluna "nome_arquivo".';
+      return;
+    }
+    await generateZipWithMultiplePDFs(csvData.value);
+  }
+}
+
+
+//funcao para criar um PDF unico
+const generateSinglePDF = async (urlList) => { 
+  try {
+    status.value = 'Gerando PDF único…'
+    downloadUrl.value = ''
+  
+    if (urlList.length === 0) {
+      throw new Error('Nenhuma URL encontrada para gerar o PDF.')
     }
 
     const pdfDoc = await PDFDocument.create()
     pdfDoc.registerFontkit(fontkit)
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
 
+
     let pageW = 595
-    let pageH = 842 // A4 default
+    let pageH = 842
 
     if (state.value.templateType === 'pdf') {
-      const src = state.value.templatePdf
-      const first = src.getPages()[0]
-      const baseW = first.getWidth()
-      const baseH = first.getHeight()
-      
-      // Calculate page dimensions based on rotation
-      if (pageRotation.value === 90 || pageRotation.value === 270) {
-        pageW = baseH
-        pageH = baseW
-      } else {
-        pageW = baseW
-        pageH = baseH
-      }
-
-      // Embed the template page ONCE, reuse for all pages
+      const src = state.value.templatePdf; const first = src.getPages()[0]
+      const baseW = first.getWidth(); const baseH = first.getHeight()
+      if (pageRotation.value === 90 || pageRotation.value === 270) { pageW = baseH; pageH = baseW } else { pageW = baseW; pageH = baseH }
       const [embedded] = await pdfDoc.embedPdf(state.value.templateBytes, [0])
-      
-      // Draw options with rotation
-      const drawOptions = {
-        x: 0,
-        y: 0,
-        width: baseW,
-        height: baseH
-      }
-      
+      const drawOptions = { x: 0, y: 0, width: baseW, height: baseH }
       if (pageRotation.value !== 0) {
         drawOptions.rotate = { type: 'degrees', angle: pageRotation.value }
-        
-        // Adjust position based on rotation
-        if (pageRotation.value === 90) {
-          drawOptions.x = pageW
-          drawOptions.y = 0
-        } else if (pageRotation.value === 180) {
-          drawOptions.x = pageW
-          drawOptions.y = pageH
-        } else if (pageRotation.value === 270) {
-          drawOptions.x = 0
-          drawOptions.y = pageH
-        }
+        if (pageRotation.value === 90) { drawOptions.x = pageW } else if (pageRotation.value === 180) { drawOptions.x = pageW; drawOptions.y = pageH } else if (pageRotation.value === 270) { drawOptions.y = pageH }
       }
 
       for (const u of urlList) {
@@ -737,47 +802,22 @@ const generatePDF = async () => {
         await drawTextFields(pdfDoc, page)
       }
     } else {
-      // Use helper function for page dimensions
-      const dims = getPageDimensions()
-      pageW = dims.width
-      pageH = dims.height
-
+      const dims = getPageDimensions(); pageW = dims.width; pageH = dims.height
       let bgBytes = null
       if (state.value.templateType === 'image') {
-        // Convert image to PNG bytes for pdf-lib
-        const pngBytes = await imageElementToPngBytes(state.value.templateImage)
-        bgBytes = pngBytes
+        bgBytes = await imageElementToPngBytes(state.value.templateImage)
       }
 
       for (const u of urlList) {
         const page = pdfDoc.addPage([pageW, pageH])
-        
-        // Draw background color if no template
         if (!bgBytes) {
-          const hex = backgroundColor.value.replace('#', '')
-          const r = parseInt(hex.substring(0, 2), 16) / 255
-          const g = parseInt(hex.substring(2, 4), 16) / 255
-          const b = parseInt(hex.substring(4, 6), 16) / 255
-          page.drawRectangle({
-            x: 0,
-            y: 0,
-            width: pageW,
-            height: pageH,
-            color: rgb(r, g, b),
-          })
+          const hex = backgroundColor.value.replace('#', ''); const r = parseInt(hex.substring(0, 2), 16) / 255, g = parseInt(hex.substring(2, 4), 16) / 255, b = parseInt(hex.substring(4, 6), 16) / 255
+          page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: rgb(r, g, b) })
         }
-        
-        // Draw background image (fit to page)
         if (bgBytes) {
           const png = await pdfDoc.embedPng(bgBytes)
           const dims = png.scale(Math.min(pageW / png.width, pageH / png.height))
-          // center-fit
-          page.drawImage(png, {
-            x: (pageW - dims.width) / 2,
-            y: (pageH - dims.height) / 2,
-            width: dims.width,
-            height: dims.height,
-          })
+          page.drawImage(png, { x: (pageW - dims.width) / 2, y: (pageH - dims.height) / 2, width: dims.width, height: dims.height })
         }
         await drawQrOnPage(pdfDoc, page, u, font)
         await drawTextFields(pdfDoc, page)
@@ -788,17 +828,89 @@ const generatePDF = async () => {
     const blob = new Blob([pdfBytes], { type: 'application/pdf' })
     const url = URL.createObjectURL(blob)
     downloadUrl.value = url
-    urlCount.value = urlList.length
+    urlCount.value = dataList.length
     status.value = 'Concluído.'
 
-    // Download automático
     setTimeout(() => {
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'qrs.pdf'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
+      const a = document.createElement('a'); a.href = url; a.download = 'qrs.pdf';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    }, 100)
+  } catch (err) {
+    console.error(err)
+    status.value = 'Erro: ' + err.message
+  }
+}
+
+//funcao para criar varios PDFs e zipar
+const generateZipWithMultiplePDFs = async (dataList) => {
+  try {
+    status.value = 'Iniciando geração do ZIP...'
+    downloadUrl.value = ''
+    const zip = new JSZip()
+    
+    let counter = 1
+    for (const item of dataList) {
+      status.value = `Gerando PDF ${counter} de ${dataList.length}...`
+      const u = item.valor
+
+      const pdfDoc = await PDFDocument.create()
+      pdfDoc.registerFontkit(fontkit)
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+      
+      // A lógica de criação de página é repetida aqui para cada PDF individual
+      let pageW = 595, pageH = 842
+      if (state.value.templateType === 'pdf') {
+        const src = state.value.templatePdf; const first = src.getPages()[0]
+        const baseW = first.getWidth(); const baseH = first.getHeight()
+        if (pageRotation.value === 90 || pageRotation.value === 270) { pageW = baseH; pageH = baseW }
+        else { pageW = baseW; pageH = baseH }
+        const [embedded] = await pdfDoc.embedPdf(state.value.templateBytes, [0])
+        const page = pdfDoc.addPage([pageW, pageH])
+        const drawOptions = { x: 0, y: 0, width: baseW, height: baseH }
+        if (pageRotation.value !== 0) {
+          drawOptions.rotate = { type: 'degrees', angle: pageRotation.value }
+          if (pageRotation.value === 90) { drawOptions.x = pageW }
+          else if (pageRotation.value === 180) { drawOptions.x = pageW; drawOptions.y = pageH }
+          else if (pageRotation.value === 270) { drawOptions.y = pageH }
+        }
+        page.drawPage(embedded, drawOptions)
+        await drawQrOnPage(pdfDoc, page, u, font); await drawTextFields(pdfDoc, page)
+      } else {
+        const dims = getPageDimensions(); pageW = dims.width; pageH = dims.height
+        const page = pdfDoc.addPage([pageW, pageH])
+        if (state.value.templateType === 'image') {
+          const bgBytes = await imageElementToPngBytes(state.value.templateImage)
+          const png = await pdfDoc.embedPng(bgBytes)
+          const dims = png.scale(Math.min(pageW / png.width, pageH / png.height))
+          page.drawImage(png, { x: (pageW - dims.width) / 2, y: (pageH - dims.height) / 2, width: dims.width, height: dims.height })
+        } else {
+          const hex = backgroundColor.value.replace('#', '')
+          const r = parseInt(hex.substring(0, 2), 16) / 255, g = parseInt(hex.substring(2, 4), 16) / 255, b = parseInt(hex.substring(4, 6), 16) / 255
+          page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: rgb(r, g, b) })
+        }
+        await drawQrOnPage(pdfDoc, page, u, font); await drawTextFields(pdfDoc, page)
+      }
+
+      const pdfBytes = await pdfDoc.save()
+
+      let filename = item.nome_arquivo || `qrcode-${counter}`;
+      if (!filename.toLowerCase().endsWith('.pdf')) {
+        filename = filename.replace(/\.(png|jpe?g|gif)$/i, '') + '.pdf';
+      }
+      zip.file(filename, pdfBytes)
+      counter++
+    }
+
+    status.value = 'Compactando arquivos no ZIP...'
+    const content = await zip.generateAsync({ type: 'blob' })
+    const url = URL.createObjectURL(content)
+    downloadUrl.value = url
+    urlCount.value = dataList.length
+    status.value = 'Concluído.'
+
+    setTimeout(() => {
+      const a = document.createElement('a'); a.href = url; a.download = 'qrs.zip';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
     }, 100)
   } catch (err) {
     console.error(err)
@@ -1781,5 +1893,40 @@ input[type="color"] {
   border-radius: 4px;
   color: #999;
   font-style: italic;
+}
+
+.data-source-separator {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: #999;
+  margin: 1rem 0;
+}
+.data-source-separator::before,
+.data-source-separator::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #ddd;
+}
+.data-source-separator:not(:empty)::before {
+  margin-right: .25em;
+}
+.data-source-separator:not(:empty)::after {
+  margin-left: .25em;
+}
+.csv-info {
+  margin-top: 0.5rem;
+  display: block;
+  color: #0066cc;
+}
+
+.export-option-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-weight: 500;
+  color: #555;
+  flex: 1;
+  min-width: 200px;
 }
 </style>
