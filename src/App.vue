@@ -5,9 +5,9 @@
       Cole URLs (uma por linha), escolha um template (imagem ou PDF opcional), defina a posição/tamanho do QR e gere um PDF com uma página por URL — tudo no navegador.
     </p>
 
-    <div class="main-layout">
-      <form @submit.prevent class="form-section">
-      <fieldset>
+  <div class="main-layout" :class="{ 'loader-view': view === 'loader' }">
+  <form @submit.prevent class="form-section" :class="{ 'form-section--fullscreen': view === 'loader' }">
+      <fieldset v-if="view === 'loader'">
         <legend>Dados</legend>
         
         <!-- Tab Navigation -->
@@ -58,6 +58,39 @@
               Arquivo carregado: <strong>{{ csvFileName }}</strong> ({{ csvData.length }} URLs encontradas)
             </span>
           </label>
+
+          <!-- tabela de visualização de CSV -->
+          <div v-if="csvData.length" class="csv-preview" style="margin-top:0.75rem;">
+            <div class="small" style="margin-bottom:0.25rem; display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+              <div>Preview do CSV — mostrando primeiras {{ csvPreviewRows.length }} linhas ({{ csvData.length }} no total)</div>
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <label class="small" style="display:flex; align-items:center; gap:0.35rem;">Mostrar
+                  <select v-model.number="previewCount" style="font-size:0.9rem; padding:2px 6px;">
+                    <option :value="5">5</option>
+                    <option :value="10">10</option>
+                    <option :value="25">25</option>
+                    <option :value="50">50</option>
+                    <option :value="100">100</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div class="csv-table-wrapper" style="overflow:auto; max-width:100%; border:1px solid #e3e3e3; border-radius:4px;">
+              <table style="border-collapse:collapse; width:100%; min-width:400px;">
+                <thead style="background:#fafafa;">
+                  <tr>
+                    <th v-for="col in csvPreviewColumns" :key="col" style="text-align:left; padding:6px 8px; border-bottom:1px solid #eee;">{{ col }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(r, idx) in csvPreviewRows" :key="idx">
+                    <td v-for="col in csvPreviewColumns" :key="col + '-' + idx" style="padding:6px 8px; border-bottom:1px solid #f5f5f5;">{{ r[col] }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-if="csvPreviewRemaining > 0" class="small" style="margin-top:0.4rem; color:#666;">... e mais {{ csvPreviewRemaining }} linhas</div>
+          </div>
           <p class="small" style="margin-top: 0.5rem; color: #666;">
             O arquivo CSV deve ter uma coluna chamada <strong>"valor"</strong> com as URLs/textos.<br>
             Para gerar ZIP com nomes personalizados, adicione também a coluna <strong>"nome_arquivo"</strong>.
@@ -72,6 +105,19 @@
           </label>
         </div>
         
+        <!-- Template controls and page-size moved to editor view -->
+      </fieldset>
+      <!-- Loader actions: show button to proceed to editor when on loader view -->
+      <div v-if="view === 'loader'" class="loader-actions" style="margin: 1rem 0;">
+        <button type="button" class="primary" @click="goToEditor">Editar Template →</button>
+      </div>
+
+      <div v-if="view === 'editor'">
+        <div class="editor-topbar" style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem;">
+          <button type="button" class="secondary" @click="backToLoader">← Voltar — Dados</button>
+          <h3 style="margin:0; font-size:1rem; color:#333;">Editor de Template</h3>
+        </div>
+
         <div class="template-controls-row">
           <label class="template-control template-file">
             Template de fundo opcional (PDF, PNG ou JPG)
@@ -112,7 +158,6 @@
             <input v-model="backgroundColor" type="color" />
           </label>
         </div>
-      </fieldset>
 
       <fieldset>
         <legend>Configurações do QR Code</legend>
@@ -174,30 +219,8 @@
               <input v-model.number="margin" type="number" min="0" />
             </label>
           </div>
-          
-          <div class="qr-text-controls-row">
-            <label class="qr-text-control qr-render-text">
-              Renderizar texto da URL sob o QR?
-              <select v-model="renderText">
-                <option value="no">Não</option>
-                <option value="yes">Sim</option>
-              </select>
-            </label>
-            <label class="qr-text-control qr-font-size">
-              Tamanho da fonte do texto (pt)
-              <input v-model.number="fontSize" type="number" min="6" />
-            </label>
-            <label class="qr-text-control qr-max-chars">
-              Máx. caracteres da URL
-              <input v-model.number="maxChars" type="number" min="10" />
-            </label>
-          </div>
-          
-          <p class="small" style="margin-top: 0.75rem; color: #666;">
-            <strong>ECC (Error Correction Level):</strong> Quanto maior o nível, mais o QR Code pode ser danificado e ainda ser lido.<br>
-            <strong>Zona quieta:</strong> Margem branca ao redor do QR Code (recomendado: 4 módulos).
-          </p>
         </div>
+
       </fieldset>
 
       <fieldset>
@@ -216,15 +239,24 @@
         <div v-for="(field, index) in textFields" :key="field.id" class="text-field-item">
           <div class="field-header">
             <strong>Campo {{ index + 1 }}</strong>
-            <button type="button" class="remove-field-btn" @click="removeTextField(index)">
-              Remover
-            </button>
+            <button type="button" class="remove-field-btn" @click="removeTextField(index)">Remover</button>
           </div>
-          
+
           <label>
             Texto
-            <input v-model="field.text" type="text" placeholder="Digite o texto aqui..." />
+            <input v-model="field.text" :disabled="field.useColumn" type="text" placeholder="Digite o texto aqui..." />
           </label>
+
+          <div style="margin-top:0.5rem; display:flex; gap:0.5rem; align-items:center;">
+            <label style="display:flex; align-items:center; gap:0.35rem;">
+              <input type="checkbox" v-model="field.useColumn" /> Usar coluna CSV
+            </label>
+            <select v-if="field.useColumn" v-model="field.bindColumn" style="padding:4px 8px;">
+              <option :value="null">-- selecione coluna --</option>
+              <option v-for="col in csvPreviewColumns" :key="col" :value="col">{{ col }}</option>
+            </select>
+            <div class="small">Ex.: {{ csvData[0] && field.bindColumn ? csvData[0][field.bindColumn] : '-' }}</div>
+          </div>
 
           <div class="text-field-controls">
             <label class="control-item control-flex">
@@ -244,9 +276,7 @@
                   <option value="Courier">Courier</option>
                 </optgroup>
                 <optgroup v-if="customFonts.length > 0" label="Fontes Carregadas">
-                  <option v-for="font in customFonts" :key="font.name" :value="font.name">
-                    {{ font.name }}
-                  </option>
+                  <option v-for="font in customFonts" :key="font.name" :value="font.name">{{ font.name }}</option>
                 </optgroup>
               </select>
             </label>
@@ -261,33 +291,9 @@
             <label class="control-item control-format">
               Formatação
               <div class="format-buttons">
-                <button 
-                  type="button" 
-                  class="format-btn" 
-                  :class="{ active: field.bold }"
-                  @click="field.bold = !field.bold"
-                  title="Negrito"
-                >
-                  <strong>B</strong>
-                </button>
-                <button 
-                  type="button" 
-                  class="format-btn" 
-                  :class="{ active: field.italic }"
-                  @click="field.italic = !field.italic"
-                  title="Itálico"
-                >
-                  <em>I</em>
-                </button>
-                <button 
-                  type="button" 
-                  class="format-btn" 
-                  :class="{ active: field.underline }"
-                  @click="field.underline = !field.underline"
-                  title="Sublinhado"
-                >
-                  <span style="text-decoration: underline;">U</span>
-                </button>
+                <button type="button" class="format-btn" :class="{ active: field.bold }" @click="field.bold = !field.bold" title="Negrito"><strong>B</strong></button>
+                <button type="button" class="format-btn" :class="{ active: field.italic }" @click="field.italic = !field.italic" title="Itálico"><em>I</em></button>
+                <button type="button" class="format-btn" :class="{ active: field.underline }" @click="field.underline = !field.underline" title="Sublinhado"><span style="text-decoration: underline;">U</span></button>
               </div>
             </label>
           </div>
@@ -372,7 +378,7 @@
             />
           </label>
         </div>
-        <div class="actions">
+        <div class="actions" v-if="view === 'editor'">
           <button class="primary" type="button" @click="startGeneration">
             {{ getGenerateButtonText() }}
           </button>
@@ -385,10 +391,11 @@
           </a>
           <span class="small">{{ status }}</span>
         </div>
+      </div>
       </form>
 
-      <!-- Live Preview Section -->
-      <div class="preview-section">
+      <!-- Live Preview Section (only in editor view) -->
+      <div class="preview-section" v-if="view === 'editor'">
         <h2>Pré-visualização em Tempo Real</h2>
         <div class="preview-info">
           <span class="small">Primeira página • Atualiza automaticamente  •  Ctrl + rolagem do mouse para zoom na página</span>
@@ -413,7 +420,7 @@
 </template>
 
 <script setup>
-import { ref, watch, watchEffect } from 'vue'
+import { ref, watch, watchEffect, computed } from 'vue'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import Papa from 'papaparse'
@@ -434,6 +441,7 @@ const manualInput = ref('') // Input for manual generation
 const urls = ref('') // Kept for backward compatibility with batch
 const csvData = ref([]) //teste de correcao
 const csvFileName = ref('')
+const previewCount = ref(50)
 const pageSize = ref('A4')
 const pageRotation = ref(0) // 0, 90, 180, 270
 const customW = ref(595)
@@ -493,6 +501,43 @@ const showAdvancedQR = ref(false)
 // Hidden QR holder
 const qrHolder = ref(null)
 
+// View state: 'loader' (CSV/manual) or 'editor' (template editor)
+const view = ref('loader')
+
+const canEnterEditor = () => {
+  // Require at least one URL via manual input, legacy textarea `urls`, or CSV data
+  return (
+    (manualInput.value && manualInput.value.trim().length > 0) ||
+    (urls.value && urls.value.trim().length > 0) ||
+    (csvData.value && csvData.value.length > 0)
+  )
+}
+
+const goToEditor = () => {
+  if (!canEnterEditor()) {
+    status.value = '⚠️ Carregue pelo menos uma URL (manual ou CSV) antes de editar o template.'
+    setTimeout(() => { status.value = '' }, 3000)
+    return
+  }
+  view.value = 'editor'
+}
+
+const backToLoader = () => {
+  view.value = 'loader'
+}
+
+// CSV preview helpers
+const csvPreviewColumns = computed(() => {
+  if (!csvData.value || csvData.value.length === 0) return []
+  return Object.keys(csvData.value[0])
+})
+
+const csvPreviewRows = computed(() => {
+  return csvData.value ? csvData.value.slice(0, previewCount.value) : []
+})
+
+const csvPreviewRemaining = computed(() => Math.max(0, (csvData.value ? csvData.value.length : 0) - csvPreviewRows.value.length))
+
 // Rotate page by 90 degrees
 const rotatePage = () => {
   pageRotation.value = (pageRotation.value + 90) % 360
@@ -510,13 +555,37 @@ const addTextField = () => {
     bold: false,
     italic: false,
     underline: false,
-    color: '#000000'
+    color: '#000000',
+    useColumn: false,
+    bindColumn: null
   })
 }
 
 // Remove text field
 const removeTextField = (index) => {
   textFields.value.splice(index, 1)
+}
+
+// Create text fields automatically from CSV columns
+const createFieldsFromColumns = () => {
+  const cols = csvPreviewColumns.value
+  if (!cols || cols.length === 0) return
+  for (const col of cols) {
+    textFields.value.push({
+      id: textFieldIdCounter++,
+      text: '',
+      x: 40,
+      y: 40,
+      size: 12,
+      fontFamily: 'Helvetica',
+      bold: false,
+      italic: false,
+      underline: false,
+      color: '#000000',
+      bindColumn: col,
+      useColumn: true
+    })
+  }
 }
 
 // Load custom font from file upload
@@ -612,7 +681,9 @@ const exportConfiguration = () => {
         bold: field.bold,
         italic: field.italic,
         underline: field.underline,
-        color: field.color
+        color: field.color,
+        bindColumn: field.bindColumn || null,
+        useColumn: field.useColumn || false
       })),
       customFonts: customFonts.value.map(font => ({
         name: font.name,
@@ -693,7 +764,9 @@ const importConfiguration = async (event) => {
         bold: field.bold || false,
         italic: field.italic || false,
         underline: field.underline || false,
-        color: field.color || '#000000'
+        color: field.color || '#000000',
+        bindColumn: field.bindColumn || null,
+        useColumn: field.useColumn || false
       }))
     }
 
@@ -854,7 +927,7 @@ const getPageDimensions = () => {
 // Auto-update preview when parameters change
 watchEffect(() => {
   // Watch all reactive values
-  const deps = [
+    const deps = [
     manualInput.value,
     urls.value,
     activeTab.value,
@@ -875,8 +948,8 @@ watchEffect(() => {
     qrColor.value,
     qrBackground.value,
     state.value.templateBytes,
-    textFields.value.length,
-    ...textFields.value.flatMap(f => [f.text, f.x, f.y, f.size, f.fontFamily, f.bold, f.italic, f.underline, f.color]),
+    	textFields.value.length,
+    	...textFields.value.flatMap(f => [f.text, f.x, f.y, f.size, f.fontFamily, f.bold, f.italic, f.underline, f.color, f.useColumn, f.bindColumn]),
     customFonts.value.length,
     ...customFonts.value.map(f => f.name)
   ]
@@ -926,6 +999,14 @@ const generatePreview = async () => {
     let pageW = 595
     let pageH = 842 // A4 default
 
+    // Prepare a sample data row for preview (CSV first row or manual input)
+    let sampleRow = null
+    if (activeTab.value === 'batch' && csvData.value.length > 0) {
+      sampleRow = csvData.value[0]
+    } else if (activeTab.value === 'manual' && manualInput.value && manualInput.value.trim()) {
+      sampleRow = { valor: manualInput.value.trim() }
+    }
+
     if (state.value.templateType === 'pdf') {
       const src = state.value.templatePdf
       const first = src.getPages()[0]
@@ -970,7 +1051,7 @@ const generatePreview = async () => {
       
       page.drawPage(embedded, drawOptions)
       await drawQrOnPage(pdfDoc, page, urlList[0], font)
-      await drawTextFields(pdfDoc, page)
+      await drawTextFields(pdfDoc, page, sampleRow)
     } else {
       // Use helper function for page dimensions
       const dims = getPageDimensions()
@@ -1011,7 +1092,7 @@ const generatePreview = async () => {
         })
       }
       await drawQrOnPage(pdfDoc, page, urlList[0], font)
-      await drawTextFields(pdfDoc, page)
+      await drawTextFields(pdfDoc, page, sampleRow)
     }
 
     const pdfBytes = await pdfDoc.save()
@@ -1041,7 +1122,7 @@ const startGeneration = async () => {
     
     // Sempre gera um PDF único no modo manual
     await generateSinglePDF([input]);
-  } else {
+    } else {
     // Modo batch: usa CSV e respeita a opção de exportação
     if (csvData.value.length === 0) {
       status.value = 'Erro: Carregue um arquivo CSV para geração em batch.';
@@ -1049,9 +1130,8 @@ const startGeneration = async () => {
     }
 
     if (exportOption.value === 'single_pdf') {
-      // Extrai APENAS as URLs para a função de PDF único
-      const urlList = csvData.value.map(item => item.valor);
-      await generateSinglePDF(urlList);
+      // Passa os objetos CSV (para permitir preencher campos via colunas)
+      await generateSinglePDF(csvData.value);
     } else if (exportOption.value === 'multiple_pdfs_zip') {
       await generateZipWithMultiplePDFs(csvData.value);
     }
@@ -1088,11 +1168,13 @@ const generateSinglePDF = async (urlList) => {
         if (pageRotation.value === 90) { drawOptions.x = pageW } else if (pageRotation.value === 180) { drawOptions.x = pageW; drawOptions.y = pageH } else if (pageRotation.value === 270) { drawOptions.y = pageH }
       }
 
-      for (const u of urlList) {
+      for (const item of urlList) {
+        // item can be either a string (manual mode) or an object (CSV row)
+        const u = typeof item === 'string' ? item : (item.valor || '')
         const page = pdfDoc.addPage([pageW, pageH])
         page.drawPage(embedded, drawOptions)
         await drawQrOnPage(pdfDoc, page, u, font)
-        await drawTextFields(pdfDoc, page)
+        await drawTextFields(pdfDoc, page, typeof item === 'object' ? item : null)
       }
     } else {
       const dims = getPageDimensions(); pageW = dims.width; pageH = dims.height
@@ -1101,7 +1183,8 @@ const generateSinglePDF = async (urlList) => {
         bgBytes = await imageElementToPngBytes(state.value.templateImage)
       }
 
-      for (const u of urlList) {
+      for (const item of urlList) {
+        const u = typeof item === 'string' ? item : (item.valor || '')
         const page = pdfDoc.addPage([pageW, pageH])
         if (!bgBytes) {
           const hex = backgroundColor.value.replace('#', ''); const r = parseInt(hex.substring(0, 2), 16) / 255, g = parseInt(hex.substring(2, 4), 16) / 255, b = parseInt(hex.substring(4, 6), 16) / 255
@@ -1113,7 +1196,7 @@ const generateSinglePDF = async (urlList) => {
           page.drawImage(png, { x: (pageW - dims.width) / 2, y: (pageH - dims.height) / 2, width: dims.width, height: dims.height })
         }
         await drawQrOnPage(pdfDoc, page, u, font)
-        await drawTextFields(pdfDoc, page)
+        await drawTextFields(pdfDoc, page, typeof item === 'object' ? item : null)
       }
     }
 
@@ -1167,7 +1250,7 @@ const generateZipWithMultiplePDFs = async (dataList) => {
           else if (pageRotation.value === 270) { drawOptions.y = pageH }
         }
         page.drawPage(embedded, drawOptions)
-        await drawQrOnPage(pdfDoc, page, u, font); await drawTextFields(pdfDoc, page)
+    await drawQrOnPage(pdfDoc, page, u, font); await drawTextFields(pdfDoc, page, item)
       } else {
         const dims = getPageDimensions(); pageW = dims.width; pageH = dims.height
         const page = pdfDoc.addPage([pageW, pageH])
@@ -1181,7 +1264,7 @@ const generateZipWithMultiplePDFs = async (dataList) => {
           const r = parseInt(hex.substring(0, 2), 16) / 255, g = parseInt(hex.substring(2, 4), 16) / 255, b = parseInt(hex.substring(4, 6), 16) / 255
           page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: rgb(r, g, b) })
         }
-        await drawQrOnPage(pdfDoc, page, u, font); await drawTextFields(pdfDoc, page)
+  await drawQrOnPage(pdfDoc, page, u, font); await drawTextFields(pdfDoc, page, item)
       }
 
       const pdfBytes = await pdfDoc.save()
@@ -1212,33 +1295,51 @@ const generateZipWithMultiplePDFs = async (dataList) => {
 }
 
 // Draw text fields on page
-const drawTextFields = async (pdfDoc, page) => {
+// Accepts an optional dataRow (object) to fill fields bound to CSV columns
+const drawTextFields = async (pdfDoc, page, dataRow = null) => {
   for (const field of textFields.value) {
-    if (!field.text) continue // Skip empty fields
-    
+    // Determine the text to render: priority
+    // 1) bound column (field.bindColumn) with dataRow
+    // 2) template in field.text using {{col}}
+    // 3) static field.text
+    let displayText = ''
+
+    if (field.useColumn && field.bindColumn && dataRow && dataRow[field.bindColumn] !== undefined) {
+      displayText = dataRow[field.bindColumn]
+    } else if (field.text && dataRow) {
+      // Replace any {{col}} occurrences
+      displayText = String(field.text).replace(/{{\s*([^}]+)\s*}}/g, (m, p1) => {
+        return dataRow[p1] !== undefined ? String(dataRow[p1]) : ''
+      })
+    } else if (field.text) {
+      displayText = field.text
+    }
+
+    if (!displayText) continue // nothing to draw
+
     // Parse color from hex
-    const hex = field.color.replace('#', '')
+    const hex = (field.color || '#000000').replace('#', '')
     const r = parseInt(hex.substring(0, 2), 16) / 255
     const g = parseInt(hex.substring(2, 4), 16) / 255
     const b = parseInt(hex.substring(4, 6), 16) / 255
-    
+
     // Determine font based on family and styles
     const family = field.fontFamily || 'Helvetica'
     const isBold = field.bold || false
     const isItalic = field.italic || false
-    
+
     let textFont
-    
+
     // Check if it's a custom font
     const customFont = customFonts.value.find(f => f.name === family)
-    
+
     if (customFont) {
       // Use custom font (custom fonts don't support bold/italic variants)
       textFont = await pdfDoc.embedFont(customFont.bytes)
     } else {
       // Use standard fonts with variants
       let fontToEmbed
-      
+
       if (family === 'Helvetica') {
         if (isBold && isItalic) {
           fontToEmbed = StandardFonts.HelveticaBoldOblique
@@ -1273,23 +1374,24 @@ const drawTextFields = async (pdfDoc, page) => {
         // Fallback: Helvetica
         fontToEmbed = StandardFonts.Helvetica
       }
-      
+
       textFont = await pdfDoc.embedFont(fontToEmbed)
     }
+
     const yPos = page.getHeight() - field.y - field.size
-    
+
     // Draw text
-    page.drawText(field.text, {
+    page.drawText(String(displayText), {
       x: field.x,
       y: yPos,
       size: field.size,
       font: textFont,
       color: rgb(r, g, b),
     })
-    
+
     // Draw underline if enabled
     if (field.underline) {
-      const textWidth = textFont.widthOfTextAtSize(field.text, field.size)
+      const textWidth = textFont.widthOfTextAtSize(String(displayText), field.size)
       const underlineY = yPos - 2 // Slightly below the text baseline
       page.drawLine({
         start: { x: field.x, y: underlineY },
@@ -1458,6 +1560,12 @@ function resolveQRCodeCtor(){
   margin-top: 1.5rem;
 }
 
+.main-layout.loader-view {
+  /* make loader take full width and more vertical space */
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
 @media (max-width: 1200px) {
   .main-layout {
     grid-template-columns: 1fr;
@@ -1469,6 +1577,32 @@ function resolveQRCodeCtor(){
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+.form-section--fullscreen {
+  width: 100%;
+  max-width: none;
+  min-height: calc(100vh - 140px);
+  background: #fff;
+  padding: 1rem;
+  border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.06);
+}
+
+.csv-preview {
+  margin-top: 0.5rem;
+}
+
+.csv-preview .csv-table-wrapper {
+  max-height: 300px; /* taller preview */
+  overflow: auto;
+}
+
+.csv-preview table thead th {
+  position: sticky;
+  top: 0;
+  background: #fafafa;
+  z-index: 2;
 }
 
 .template-info {
