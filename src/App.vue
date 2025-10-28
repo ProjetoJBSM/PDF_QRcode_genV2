@@ -57,6 +57,20 @@
             <span v-if="csvFileName" class="csv-info small">
               Arquivo carregado: <strong>{{ csvFileName }}</strong> ({{ csvData.length }} URLs encontradas)
             </span>
+          <div v-if="csvData.length > 0" class="csv-column-select" style="margin-top: 1rem;">
+            <label for="qrColumnSelect" style="font-weight: 600;">
+              1. Selecione a coluna para o QR Code:
+            </label>
+            <select id="qrColumnSelect" v-model="qrDataColumn" style="width: 100%; margin-top: 0.25rem;">
+              <option :value="null" disabled>-- Escolha a coluna com as URLs/textos --</option>
+              <option v-for="col in csvPreviewColumns" :key="col" :value="col">
+                {{ col }}
+              </option>
+            </select>
+            <p v-if="!qrDataColumn" class="small" style="color: #dc3545; margin-top: 0.25rem;">
+              ⚠️ É necessário selecionar uma coluna para continuar.
+            </p>
+          </div>
           </label>
 
           <!-- tabela de visualização de CSV -->
@@ -92,7 +106,6 @@
             <div v-if="csvPreviewRemaining > 0" class="small" style="margin-top:0.4rem; color:#666;">... e mais {{ csvPreviewRemaining }} linhas</div>
           </div>
           <p class="small" style="margin-top: 0.5rem; color: #666;">
-            O arquivo CSV deve ter uma coluna chamada <strong>"valor"</strong> com as URLs/textos.<br>
             Para gerar ZIP com nomes personalizados, adicione também a coluna <strong>"nome_arquivo"</strong>.
           </p>
           
@@ -442,6 +455,7 @@ const urls = ref('') // Kept for backward compatibility with batch
 const csvData = ref([]) //teste de correcao
 const csvFileName = ref('')
 const previewCount = ref(50)
+const qrDataColumn = ref(null)
 const pageSize = ref('A4')
 const pageRotation = ref(0) // 0, 90, 180, 270
 const customW = ref(595)
@@ -721,7 +735,7 @@ const importConfiguration = async (event) => {
   if (!file) return
 
   try {
-    const text = await file.text()
+    const text = await file.text()  
     const config = JSON.parse(text)
 
     // Validate version (for future compatibility)
@@ -821,25 +835,23 @@ const handleCsvUpload = (event) => {
   csvData.value = []
   csvFileName.value = ''
   status.value = ''
+  qrDataColumn.value = null
 
   Papa.parse(file, {
     header: true,
     skipEmptyLines: true,
     complete: (results) => {
-      if (results.data && results.meta.fields.includes('valor')) {
-        csvData.value = results.data.filter(row => row.valor && row.valor.trim() !== '');
+      if (results.data && results.data.length > 0 && results.meta.fields) {
+        csvData.value = results.data; // Apenas carrega os dados
         csvFileName.value = file.name
-        
-        // Automatically switch to batch tab
         activeTab.value = 'batch'
-
-        // Força a atualização da pré-visualização com a primeira URL do CSV
+        qrDataColumn.value = null 
+        
         if (csvData.value.length > 0) {
           generatePreview()
         }
-
       } else {
-        status.value = '⚠️ Erro: O CSV precisa ter uma coluna chamada "valor".'
+        status.value = '⚠️ Erro: O CSV está vazio ou não possui um cabeçalho válido.' // Mensagem de erro atualizada
       }
     },
     error: (err) => {
@@ -982,7 +994,7 @@ const generatePreview = async () => {
     } else {
       // Modo batch: usa CSV
       if (csvData.value.length > 0) {
-        urlList = csvData.value.map(item => item.valor)
+        urlList = csvData.value.map(item => item[qrDataColumn.value])
       }
     }
 
@@ -1128,7 +1140,10 @@ const startGeneration = async () => {
       status.value = 'Erro: Carregue um arquivo CSV para geração em batch.';
       return;
     }
-
+    if (!qrDataColumn.value) {
+    status.value = 'Erro: Por favor, selecione a coluna que contém os dados do QR Code.';
+    return;
+    }
     if (exportOption.value === 'single_pdf') {
       // Passa os objetos CSV (para permitir preencher campos via colunas)
       await generateSinglePDF(csvData.value);
@@ -1170,7 +1185,7 @@ const generateSinglePDF = async (urlList) => {
 
       for (const item of urlList) {
         // item can be either a string (manual mode) or an object (CSV row)
-        const u = typeof item === 'string' ? item : (item.valor || '')
+        const u = typeof item === 'string' ? item : (item[qrDataColumn.value] || '')
         const page = pdfDoc.addPage([pageW, pageH])
         page.drawPage(embedded, drawOptions)
         await drawQrOnPage(pdfDoc, page, u, font)
@@ -1184,7 +1199,7 @@ const generateSinglePDF = async (urlList) => {
       }
 
       for (const item of urlList) {
-        const u = typeof item === 'string' ? item : (item.valor || '')
+        const u = typeof item === 'string' ? item : (item[qrDataColumn.value] || '')
         const page = pdfDoc.addPage([pageW, pageH])
         if (!bgBytes) {
           const hex = backgroundColor.value.replace('#', ''); const r = parseInt(hex.substring(0, 2), 16) / 255, g = parseInt(hex.substring(2, 4), 16) / 255, b = parseInt(hex.substring(4, 6), 16) / 255
@@ -1227,7 +1242,7 @@ const generateZipWithMultiplePDFs = async (dataList) => {
     let counter = 1
     for (const item of dataList) {
       status.value = `Gerando PDF ${counter} de ${dataList.length}...`
-      const u = item.valor
+      const u = item[qrDataColumn.value]
 
       const pdfDoc = await PDFDocument.create()
       pdfDoc.registerFontkit(fontkit)
