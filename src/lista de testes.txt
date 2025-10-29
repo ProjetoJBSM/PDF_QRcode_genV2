@@ -1,0 +1,29 @@
+testes a serem realizados:
+
+criação de arquivos em PDF x ZIP (1 QR code padrão, 1 campo de texto fixo, 1 campo de texto variável, fundo sólido, fonte Helvetica)
+
+samples | ------ JS ------- | -- WebAssembly -- |
+        | - PDF - | - ZIP - | - PDF - | - ZIP - |
+10      |
+100     |
+500     |
+1000    |
+2000    |
+
+criação de arquivos em PDF, carregamento de imagem de fundo x fundo sólido (1 QR code padrão, 1 campo de texto fixo, 1 campo de texto variável, fonte Helvetica)
+
+samples | --- Imagem --- | --- Sólido --- |
+10      |
+100     |
+500     |
+1000    |
+2000    |
+
+criação de arquivos em PDF, carregamento de fonte customizada x fonte padrão (helvetica) (1 QR code padrão, 1 campo de texto fixo, 1 campo de texto variável, fundo sólido)
+
+samples | --- Imagem --- | --- Sólido --- |
+10      |
+100     |
+500     |
+1000    |
+2000    |
