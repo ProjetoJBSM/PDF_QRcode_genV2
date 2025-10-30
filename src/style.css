@@ -1,3 +1,5 @@
+/* Clean app styles - combined from original src/style.css and App.vue */
+
 :root {
   --gap: 10px;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
@@ -18,6 +20,13 @@ h1 {
   margin: 0 0 12px;
 }
 
+.hint {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 16px;
+}
+
+/* Basic form elements */
 fieldset {
   border: 1px solid #ddd;
   border-radius: 12px;
@@ -25,106 +34,480 @@ fieldset {
   margin-bottom: 16px;
 }
 
-legend {
-  padding: 0 6px;
-  color: #444;
+legend { padding: 0 6px; color: #444; }
+
+label { display: block; font-size: 12px; color: #333; margin-top: 8px; }
+
+input[type="number"], input[type="text"], input[type="file"], select, textarea {
+  width: 100%; box-sizing: border-box; padding: 8px; border-radius: 8px; border: 1px solid #ccc; margin-top: 4px;
 }
 
-label {
-  display: block;
-  font-size: 12px;
-  color: #333;
-  margin-top: 8px;
+textarea { height: 120px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; resize: vertical; }
+
+.row { display: grid; gap: var(--gap); grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+
+.actions { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+
+button { padding: 10px 14px; border-radius: 10px; border: 1px solid #ccc; background: #f7f7f7; cursor: pointer; font-size: 14px; }
+button:hover { background: #e7e7e7 }
+
+button.primary { background: #111; color: #fff; border-color: #111 }
+button.primary:hover { background: #333 }
+
+/* Main Layout from App.vue */
+.main-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 1.5rem }
+.main-layout.loader-view { grid-template-columns: 1fr; align-items: start }
+@media (max-width: 1200px) { .main-layout { grid-template-columns: 1fr } }
+
+.form-section { display:flex; flex-direction:column; gap:1.5rem }
+.form-section--fullscreen { width:100%; max-width:none; min-height:calc(100vh - 140px); background:#fff; padding:1rem; border-radius:6px; box-shadow:0 6px 24px rgba(0,0,0,0.06) }
+
+.csv-preview { margin-top:0.5rem }
+.csv-preview .csv-table-wrapper { max-height:300px; overflow:auto }
+.csv-preview table thead th { position:sticky; top:0; background:#fafafa; z-index:2 }
+
+.template-info { padding:0.75rem; background-color:#e7f3ff; border-left:4px solid #0066cc; border-radius:4px; font-size:0.9rem; color:#333 }
+
+.actions { display:flex; gap:1rem; align-items:center; flex-wrap:wrap; padding-top:1rem; border-top:2px solid #eee }
+
+button.primary { background-color:#0066cc; color:white; padding:0.75rem 1.5rem; border:none; border-radius:4px; cursor:pointer; font-size:1rem; font-weight:600; transition:background-color .2s }
+button.primary:hover { background-color:#0052a3 }
+
+button.secondary { background-color:#6c757d; color:white; padding:0.75rem 1.5rem; border:none; border-radius:4px; cursor:pointer; font-size:1rem; font-weight:600 }
+button.secondary:hover { background-color:#5a6268 }
+
+.import-btn { background-color:#28a745; color:white; padding:0.75rem 1.5rem; border:none; border-radius:4px; cursor:pointer; font-size:1rem; font-weight:600; display:inline-block }
+.import-btn:hover { background-color:#218838 }
+
+.config-actions { display:flex; gap:1rem; margin-bottom:1rem; flex-wrap:wrap }
+
+/* Preview Section */
+.preview-section { position:sticky; top:1rem; height:fit-content; max-height:calc(100vh - 2rem); display:flex; flex-direction:column }
+.preview-section h2 { margin:0 0 .5rem 0; font-size:1.25rem; color:#333 }
+.preview-info { margin-bottom:1rem }
+.preview-container { flex:1; min-height:80vh; max-height:80vh; border:2px solid #ddd; border-radius:8px; overflow:hidden; background:#f5f5f5; box-shadow:0 2px 8px rgba(0,0,0,0.1) }
+.pdf-preview { width:100%; height:80vh; border:none; background:#fff }
+.preview-placeholder { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#999; padding:2rem; text-align:center }
+
+.small { font-size:0.875rem; color:#666 }
+
+/* Template controls and rotate buttons */
+.template-controls-row { display:flex; gap:.75rem; align-items:flex-end; margin: .5rem 0 }
+.template-control { display:flex; flex-direction:column }
+.template-file { flex:1; min-width:0 }
+.rotate-btn-square { width:60px; height:42px; padding:0; background:#818181; color:#fff; border:none; border-radius:4px; display:flex; align-items:center; justify-content:center; margin-left:auto }
+.rotate-btn-square:hover { background:#4a4a4a; transform:translateY(-1px); box-shadow:0 2px 8px rgba(23,162,184,0.3) }
+
+/* Page controls */
+.page-controls-row { display:flex; gap:.75rem; align-items:flex-end }
+.page-size { flex:1; min-width:150px }
+.page-dimension { flex:1; min-width:120px }
+.page-bg-color { width:80px; flex-shrink:0 }
+.page-bg-color input[type="color"] { height:42px }
+
+/* QR controls */
+.qr-controls-row, .qr-text-controls-row { display:flex; gap:.75rem; align-items:flex-end; margin-top:.5rem }
+.qr-size { flex:1; min-width:130px }
+.qr-position { flex:1.4; min-width:180px }
+.qr-ecc { flex:.8; min-width:100px }
+.qr-margin { flex:1; min-width:130px }
+.qr-color { width:90px; flex-shrink:0 }
+.qr-color input[type="color"] { height:42px }
+.qr-checkbox-wrapper { width:50px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end }
+
+/* Text fields UI */
+.text-fields-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem }
+.add-field-btn { background:#28a745; color:#fff; padding:.5rem 1rem; border-radius:4px }
+.add-field-btn:hover { background:#218838 }
+.no-fields { padding:2rem; text-align:center; background:#f8f9fa; border:2px dashed #ddd }
+.text-field-item { margin-bottom:1.5rem; padding:1rem; background:#f8f9fa; border:1px solid #ddd; border-radius:6px }
+.field-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; padding-bottom:.5rem; border-bottom:2px solid #e0e0e0 }
+.remove-field-btn { background:#dc3545; color:#fff; padding:.4rem .8rem; border-radius:4px }
+.remove-field-btn:hover { background:#c82333 }
+
+.text-field-controls { display:flex; gap:.75rem; align-items:flex-end; margin-top:.5rem }
+.control-flex { flex:1; min-width:0 }
+.control-font { width:200px; flex-shrink:0 }
+.control-color { width:60px }
+
+/* Formatting buttons */
+.format-buttons { display:flex; gap:.5rem }
+.format-btn { width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:white; border:2px solid #ccc; border-radius:4px }
+.format-btn.active { background:#0066cc; border-color:#0066cc; color:#fff }
+
+/* Fonts list and upload */
+.upload-font-btn { display:inline-block; padding:.75rem 1.5rem; background:#6c757d; color:#fff; border-radius:4px }
+.upload-font-btn:hover { background:#5a6268 }
+.font-loading { padding:.75rem; background:#fff3cd; border-left:4px solid #ffc107 }
+.font-error { padding:.75rem; background:#f8d7da; border-left:4px solid #dc3545 }
+
+/* Tabs */
+.tab-navigation { display:flex; gap:.5rem; margin-bottom:1.5rem; border-bottom:2px solid #e0e0e0 }
+.tab-button { flex:1; padding:.75rem 1rem; background:transparent; border:none; border-bottom:3px solid transparent; color:#666 }
+.tab-button.active { color:#0066cc; border-bottom-color:#0066cc; background:#f0f8ff }
+
+/* CSV info */
+.csv-info { margin-top:.75rem; padding:.75rem; color:#0066cc; background:#e7f3ff; border-left:4px solid #0066cc }
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .qr-controls-row, .qr-text-controls-row { flex-wrap:wrap }
+  .qr-control, .qr-text-control { min-width:calc(50% - .375rem) }
 }
 
-input[type="number"],
-input[type="text"],
-input[type="file"],
-select,
-textarea {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 8px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  margin-top: 4px;
-}
 
-textarea {
-  height: 120px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  resize: vertical;
-}
+  :root {
+    --gap: 10px;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  }
 
-.row {
-  display: grid;
-  gap: var(--gap);
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 
-.actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-top: 16px;
-}
+  body {
+    margin: 24px;
+  }
 
-button {
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: 1px solid #ccc;
-  background: #f7f7f7;
-  cursor: pointer;
-  font-size: 14px;
-}
+  h1 {
+    font-size: 18px;
+    margin: 0 0 12px;
+  }
 
-button:hover {
-  background: #e7e7e7;
-}
+  fieldset {
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 16px;
+  }
 
-button.primary {
-  background: #111;
-  color: #fff;
-  border-color: #111;
-}
+  legend {
+    padding: 0 6px;
+    color: #444;
+  }
 
-button.primary:hover {
-  background: #333;
-}
+  label {
+    display: block;
+    font-size: 12px;
+    color: #333;
+    margin-top: 8px;
+  }
 
-.hint {
-  font-size: 12px;
-  color: #666;
-  margin-bottom: 16px;
-}
+  input[type="number"],
+  input[type="text"],
+  input[type="file"],
+  select,
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    margin-top: 4px;
+  }
 
-.preview {
-  border: 1px dashed #bbb;
-  border-radius: 12px;
-  padding: 8px;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-top: 16px;
-}
+  textarea {
+    height: 120px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    resize: vertical;
+  }
 
-.inline {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
+  .row {
+    display: grid;
+    gap: var(--gap);
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
 
-.small {
-  font-size: 12px;
-  color: #555;
-}
+  .actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 16px;
+  }
 
-a {
-  color: #111;
-  text-decoration: none;
-  font-weight: 600;
-}
+  button {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    background: #f7f7f7;
+    cursor: pointer;
+    font-size: 14px;
+  }
 
-a:hover {
-  text-decoration: underline;
-}
+  button:hover {
+    background: #e7e7e7;
+  }
+
+  button.primary {
+    background: #111;
+    color: #fff;
+    border-color: #111;
+  }
+
+  button.primary:hover {
+    background: #333;
+  }
+
+  .hint {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 16px;
+  }
+
+  .preview {
+    border: 1px dashed #bbb;
+    border-radius: 12px;
+    padding: 8px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 16px;
+  }
+
+  .inline {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .small {
+    font-size: 12px;
+    color: #555;
+  }
+
+  a {
+    color: #111;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+
+  /* --- App.vue extracted styles (originally in <style scoped>) --- */
+
+  /* Main Layout - Two columns */
+  .main-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 1.5rem;
+  }
+
+  .main-layout.loader-view {
+    /* make loader take full width and more vertical space */
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  @media (max-width: 1200px) {
+    .main-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Form Section */
+  .form-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .form-section--fullscreen {
+    width: 100%;
+    max-width: none;
+    min-height: calc(100vh - 140px);
+    background: #fff;
+    padding: 1rem;
+    border-radius: 6px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.06);
+  }
+
+  .csv-preview {
+    margin-top: 0.5rem;
+  }
+
+  .csv-preview .csv-table-wrapper {
+    max-height: 300px; /* taller preview */
+    overflow: auto;
+  }
+
+  .csv-preview table thead th {
+    position: sticky;
+    top: 0;
+    background: #fafafa;
+    z-index: 2;
+  }
+
+  .template-info {
+    padding: 0.75rem;
+    background-color: #e7f3ff;
+    border-left: 4px solid #0066cc;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    color: #333;
+  }
+
+  .actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    padding-top: 1rem;
+    border-top: 2px solid #eee;
+  }
+
+  button.primary {
+    background-color: #0066cc;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: background-color 0.2s;
+  }
+
+  button.primary:hover {
+    background-color: #0052a3;
+  }
+
+  button.secondary {
+    background-color: #6c757d;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: background-color 0.2s;
+  }
+
+  button.secondary:hover {
+    background-color: #5a6268;
+  }
+
+  .import-btn {
+    background-color: #28a745;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: background-color 0.2s;
+    display: inline-block;
+    margin: 0;
+  }
+
+  .import-btn:hover {
+    background-color: #218838;
+  }
+
+  .config-actions {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  /* Preview Section - Sticky */
+  .preview-section {
+    position: sticky;
+    top: 1rem;
+    height: fit-content;
+    max-height: calc(100vh - 2rem);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .preview-section h2 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.25rem;
+    color: #333;
+  }
+
+  .preview-info {
+    margin-bottom: 1rem;
+  }
+
+  .preview-container {
+    flex: 1;
+    min-height: 80vh;
+    max-height: 80vh;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: #f5f5f5;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .pdf-preview {
+    width: 100%;
+    height: 80vh;
+    border: none;
+    background-color: white;
+  }
+
+  .preview-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #999;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  .preview-placeholder p {
+    margin: 0.5rem 0;
+  }
+
+  .small {
+    font-size: 0.875rem;
+    color: #666;
+  }
+
+  /* Improve form readability */
+  fieldset {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 1rem;
+    margin: 0;
+  }
+
+  legend {
+    font-weight: 600;
+    padding: 0 0.5rem;
+    color: #333;
+  }
+
+  label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #555;
+  }
+
+  input, select, textarea {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.95rem;
+  }
+
+  textarea {
+    min-height: 100px;
+    resize: vertical;
+  }
+
+  /* (rest of App.vue styles appended below) */

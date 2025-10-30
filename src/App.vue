@@ -1,6 +1,9 @@
 <template>
   <div>
-    <h1>Client-side QR Batch → PDF</h1>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <h1 style="margin:0">Client-side QR Batch → PDF</h1>
+      <div style="font-size:0.9rem; color:#444; background:#f0f8ff; padding:6px 8px; border-radius:6px;">Engine: <strong style="margin-left:6px">{{ engineUsed }}</strong></div>
+    </div>
     <p class="hint">
       Cole URLs (uma por linha), escolha um template (imagem ou PDF opcional), defina a posição/tamanho do QR e gere um PDF com uma página por URL — tudo no navegador.
     </p>
@@ -514,6 +517,75 @@ const showAdvancedQR = ref(false)
 
 // Hidden QR holder
 const qrHolder = ref(null)
+
+// WASM integration state
+let wasmModule = null
+const wasmAvailable = ref(false)
+const engineUsed = ref('JS') // UI indicator: 'JS' or 'WASM'
+let wasmInitAttempted = false
+
+// Try to dynamically import the wasm package produced by wasm-pack (if present)
+async function tryInitWasm() {
+  if (wasmInitAttempted) return wasmAvailable.value
+  wasmInitAttempted = true
+  try {
+    // Build a list of candidate paths to try at runtime. Vite may serve the app under a base
+    // path (e.g. /PDF_QRcode_genV2/), so try both the BASE_URL and absolute paths.
+    const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) ? import.meta.env.BASE_URL : '/'
+    const candidates = [
+      `${base}packages/wasm-qrcode/pkg/wasm_qrcode.js`,
+      `${base}packages/pkg/wasm_qrcode.js`,
+      `${base}pkg/wasm_qrcode.js`,
+      `/packages/wasm-qrcode/pkg/wasm_qrcode.js`,
+      `/packages/pkg/wasm_qrcode.js`,
+      `/pkg/wasm_qrcode.js`,
+    ]
+
+    let found = null
+    for (const p of candidates) {
+      try {
+        const head = await fetch(p, { method: 'HEAD' })
+        console.debug('WASM candidate', p, 'status', head.status)
+        if (head.ok) { found = p; break }
+      } catch (e) {
+        console.debug('WASM candidate', p, 'fetch error', e && e.message)
+        // ignore and try next
+      }
+    }
+
+    if (!found) {
+      console.warn('Tried wasm candidates:', candidates)
+      throw new Error('wasm pkg not found in candidate paths')
+    }
+
+    // Import at runtime; tell Vite to ignore static analysis for this dynamic path
+    // eslint-disable-next-line no-undef
+    const mod = await import(/* @vite-ignore */ found)
+
+    // Some wasm-pack bundles export a default initializer that must be awaited
+    if (mod && typeof mod.default === 'function') {
+      try {
+        await mod.default()
+      } catch (e) {
+        // ignore init errors; module might already be ready
+      }
+    }
+    wasmModule = mod
+    wasmAvailable.value = true
+    engineUsed.value = 'WASM'
+    console.info('WASM module loaded from', found)
+    return true
+  } catch (err) {
+    console.warn('WASM module not available:', err)
+    wasmModule = null
+    wasmAvailable.value = false
+    engineUsed.value = 'JS'
+    return false
+  }
+}
+
+// Try initialization in background (non-blocking)
+tryInitWasm().catch(() => {})
 
 // View state: 'loader' (CSV/manual) or 'editor' (template editor)
 const view = ref('loader')
@@ -1429,7 +1501,77 @@ const drawQrOnPage = async (pdfDoc, page, urlText, font) => {
   const fontSizeVal = fontSize.value || 12
   const maxCharsVal = maxChars.value || 64
 
-  // Generate QR on a temporary canvas via qrcodejs
+  // Try to use WASM generator first (if available)
+  try {
+    await tryInitWasm()
+    if (wasmAvailable.value && wasmModule) {
+      // Attempt to use an exported function that returns RGBA bytes.
+      // The wasm scaffold currently exposes `generate_white_rgba(size)` as a stub.
+      const genFn = wasmModule.generate_rgba || wasmModule.generate_white_rgba || wasmModule.generate_rgba_buffer
+      if (typeof genFn === 'function') {
+        try {
+          // Call wasm function. It may return a Uint8Array or an Array.
+          const pixels = await genFn(size)
+          if (pixels && (pixels.length === size * size * 4)) {
+            // Create image from RGBA pixels
+            const canvas = document.createElement('canvas')
+            canvas.width = size
+            canvas.height = size
+            const ctx = canvas.getContext('2d')
+            const clamped = new Uint8ClampedArray(pixels.buffer ? pixels.buffer : pixels)
+            const imgData = new ImageData(clamped, size, size)
+            ctx.putImageData(imgData, 0, 0)
+
+            // Apply quiet zone / padding
+            const padPx = Math.round(marginVal * (canvas.width / 41))
+            const padded = document.createElement('canvas')
+            padded.width = canvas.width + padPx * 2
+            padded.height = canvas.height + padPx * 2
+            const pctx = padded.getContext('2d')
+            if (qrBackground.value) {
+              pctx.fillStyle = '#fff'
+              pctx.fillRect(0, 0, padded.width, padded.height)
+            }
+            pctx.drawImage(canvas, padPx, padPx)
+
+            const dataUrl = padded.toDataURL('image/png')
+            const png = await pdfDoc.embedPng(dataUrl)
+            page.drawImage(png, {
+              x: x,
+              y: page.getHeight() - y - size,
+              width: size,
+              height: size,
+            })
+
+            if (showText) {
+              const text = ellipsize(urlText, maxCharsVal)
+              page.drawText(text, {
+                x: x,
+                y: page.getHeight() - y - size - (fontSizeVal + 6),
+                size: fontSizeVal,
+                font,
+                color: rgb(0, 0, 0),
+              })
+            }
+
+            // WASM used successfully
+            engineUsed.value = 'WASM'
+            return
+          }
+        } catch (innerErr) {
+          console.warn('WASM QR generator failed, falling back to JS', innerErr)
+          wasmAvailable.value = false
+          engineUsed.value = 'JS'
+        }
+      }
+    }
+  } catch (e) {
+    // ignore and fall back to JS implementation
+    wasmAvailable.value = false
+    engineUsed.value = 'JS'
+  }
+
+  // Generate QR on a temporary canvas via qrcodejs (JS fallback)
   const holder = document.createElement('div')
   qrHolder.value.appendChild(holder)
 
@@ -1443,11 +1585,27 @@ const drawQrOnPage = async (pdfDoc, page, urlText, font) => {
     height: size,
     // Usamos nosso próprio mapa de níveis para evitar erro "Cannot read properties of undefined (reading 'L')"
     correctLevel: QR_CORRECT_LEVEL[eccLevel],
+    // Ensure explicit colors so the initial canvas isn't rendered with an unexpected background
+    colorDark: '#000000',
+    colorLight: '#ffffff',
   })
 
-  await tick() // allow canvas render
-
-  const canvas = holder.querySelector('canvas')
+  // Wait for the QR library to create and paint the canvas. Some bundles draw asynchronously
+  // and a zero-delay tick() may be insufficient the first time; poll briefly for a painted canvas.
+  const canvas = await (async () => {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const c = holder.querySelector('canvas')
+      if (c && c.width > 0 && c.height > 0) {
+        // Slight additional delay to ensure drawing finished
+        await new Promise(r => setTimeout(r, 20))
+        return c
+      }
+      // small backoff
+      await new Promise(r => setTimeout(r, 30))
+    }
+    // final attempt
+    return holder.querySelector('canvas')
+  })()
   
   // Apply custom color to QR code
   const tempCanvas = document.createElement('canvas')
@@ -1565,1107 +1723,3 @@ function resolveQRCodeCtor(){
   return null
 }
 </script>
-
-<style scoped>
-/* Main Layout - Two columns */
-.main-layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-  margin-top: 1.5rem;
-}
-
-.main-layout.loader-view {
-  /* make loader take full width and more vertical space */
-  grid-template-columns: 1fr;
-  align-items: start;
-}
-
-@media (max-width: 1200px) {
-  .main-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Form Section */
-.form-section {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.form-section--fullscreen {
-  width: 100%;
-  max-width: none;
-  min-height: calc(100vh - 140px);
-  background: #fff;
-  padding: 1rem;
-  border-radius: 6px;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.06);
-}
-
-.csv-preview {
-  margin-top: 0.5rem;
-}
-
-.csv-preview .csv-table-wrapper {
-  max-height: 300px; /* taller preview */
-  overflow: auto;
-}
-
-.csv-preview table thead th {
-  position: sticky;
-  top: 0;
-  background: #fafafa;
-  z-index: 2;
-}
-
-.template-info {
-  padding: 0.75rem;
-  background-color: #e7f3ff;
-  border-left: 4px solid #0066cc;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  color: #333;
-}
-
-.actions {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  flex-wrap: wrap;
-  padding-top: 1rem;
-  border-top: 2px solid #eee;
-}
-
-button.primary {
-  background-color: #0066cc;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
-}
-
-button.primary:hover {
-  background-color: #0052a3;
-}
-
-button.secondary {
-  background-color: #6c757d;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
-}
-
-button.secondary:hover {
-  background-color: #5a6268;
-}
-
-.import-btn {
-  background-color: #28a745;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
-  display: inline-block;
-  margin: 0;
-}
-
-.import-btn:hover {
-  background-color: #218838;
-}
-
-.config-actions {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-
-button.secondary {
-  background-color: #6c757d;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
-}
-
-button.secondary:hover {
-  background-color: #5a6268;
-}
-
-.import-btn {
-  background-color: #28a745;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
-  display: inline-block;
-  margin: 0;
-}
-
-.import-btn:hover {
-  background-color: #218838;
-}
-
-.config-actions {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-
-/* Preview Section - Sticky */
-.preview-section {
-  position: sticky;
-  top: 1rem;
-  height: fit-content;
-  max-height: calc(100vh - 2rem);
-  display: flex;
-  flex-direction: column;
-}
-
-.preview-section h2 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.25rem;
-  color: #333;
-}
-
-.preview-info {
-  margin-bottom: 1rem;
-}
-
-.preview-container {
-  flex: 1;
-  min-height: 80vh;
-  max-height: 80vh;
-  border: 2px solid #ddd;
-  border-radius: 8px;
-  overflow: hidden;
-  background-color: #f5f5f5;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.pdf-preview {
-  width: 100%;
-  height: 80vh;
-  border: none;
-  background-color: white;
-}
-
-.preview-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: #999;
-  padding: 2rem;
-  text-align: center;
-}
-
-.preview-placeholder p {
-  margin: 0.5rem 0;
-}
-
-.small {
-  font-size: 0.875rem;
-  color: #666;
-}
-
-/* Improve form readability */
-fieldset {
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 1rem;
-  margin: 0;
-}
-
-legend {
-  font-weight: 600;
-  padding: 0 0.5rem;
-  color: #333;
-}
-
-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #555;
-}
-
-input, select, textarea {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-family: inherit;
-  font-size: 0.95rem;
-}
-
-textarea {
-  min-height: 100px;
-  resize: vertical;
-}
-
-.rotate-btn {
-  max-width: 40px;
-  max-height: 40px;
-  padding: 0.75rem 1rem;
-  background-color: #818181;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1.5rem;
-  font-weight: 400;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-  white-space: nowrap;
-}
-
-.rotate-btn:hover {
-  background-color: #4a4a4a;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(23, 162, 184, 0.3);
-}
-
-.rotate-btn:active {
-  transform: translateY(0) scale(0.98);
-}
-
-/* Template Controls Row */
-.template-controls-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.template-control {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 0;
-}
-
-.template-control input,
-.template-control select {
-  width: 100%;
-}
-
-/* Template file input - flexible */
-.template-file {
-  flex: 1;
-  min-width: 0;
-}
-
-button.secondary {
-  background-color: #6c757d;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
-}
-
-button.secondary:hover {
-  background-color: #5a6268;
-}
-
-.import-btn {
-  background-color: #28a745;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
-  display: inline-block;
-  margin: 0;
-}
-
-.import-btn:hover {
-  background-color: #218838;
-}
-
-.config-actions {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-/* Rotate button - aligned to right */
-.template-rotate {
-  flex-shrink: 0;
-  align-items: flex-end;
-}
-
-.rotate-btn-square {
-  width: 60px;
-  height: 42px;
-  padding: 0;
-  background-color: #818181;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1.5rem;
-  font-weight: 400;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: auto;
-}
-
-.rotate-btn-square:hover {
-  background-color: #4a4a4a;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(23, 162, 184, 0.3);
-}
-
-.rotate-btn-square:active {
-  transform: translateY(0) scale(0.98);
-}
-
-/* Page Controls Row */
-.page-controls-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.page-control {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 0;
-}
-
-.page-control input,
-.page-control select {
-  width: 100%;
-}
-
-/* Page size - flexible */
-.page-size {
-  flex: 1;
-  min-width: 150px;
-}
-
-/* Page dimensions - flexible */
-.page-dimension {
-  flex: 1;
-  min-width: 120px;
-}
-
-/* Background color - fixed 80px */
-.page-bg-color {
-  width: 80px;
-  flex-shrink: 0;
-}
-
-.page-bg-color input[type="color"] {
-  height: 42px;
-  padding: 0.25rem;
-}
-
-.row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-top: 0.5rem;
-}
-
-.inline {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.inline input {
-  width: auto;
-  flex: 1;
-}
-
-input[type="color"] {
-  cursor: pointer;
-  height: 42px;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  font-weight: 500;
-  color: #555;
-  width: 50px;
-}
-
-.checkbox-label input[type="checkbox"] {
-  width: auto;
-  height: auto;
-  cursor: pointer;
-  margin: 0;
-  transform: scale(1.2);
-}
-
-/* QR Controls - Single Row Layout */
-.qr-controls-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.qr-control {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 0;
-}
-
-.qr-control input,
-.qr-control select {
-  width: 100%;
-}
-
-/* QR Size - min 130px, flexible */
-.qr-size {
-  flex: 1;
-  min-width: 130px;
-}
-
-/* Position fields - min 180px, flexible */
-.qr-position {
-  flex: 1.4;
-  min-width: 180px;
-}
-
-/* ECC Level - min 100px, flexible */
-.qr-ecc {
-  flex: 0.8;
-  min-width: 100px;
-}
-
-/* Margin - min 130px, flexible */
-.qr-margin {
-  flex: 1;
-  min-width: 130px;
-}
-
-/* QR Text Controls - Second Row Layout */
-.qr-text-controls-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.qr-text-control {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 0;
-}
-
-.qr-text-control input,
-.qr-text-control select {
-  width: 100%;
-}
-
-/* Render text - min 200px, flexible */
-.qr-render-text {
-  flex: 1;
-  min-width: 200px;
-}
-
-/* Font size - min 200px, flexible */
-.qr-font-size {
-  flex: 1;
-  min-width: 200px;
-}
-
-/* Max chars - min 200px, flexible */
-.qr-max-chars {
-  flex: 1;
-  min-width: 200px;
-}
-
-/* QR Color - min 90px, fixed */
-.qr-color {
-  width: 90px;
-  flex-shrink: 0;
-}
-
-.qr-color input[type="color"] {
-  height: 42px;
-  padding: 0.25rem;
-}
-
-/* Checkbox wrapper - fixed 50px for text width */
-.qr-checkbox-wrapper {
-  width: 50px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.25rem;
-  cursor: pointer;
-}
-
-.checkbox-label-text {
-  font-size: 0.75rem;
-  text-align: center;
-  line-height: 1.1;
-  word-wrap: break-word;
-  font-weight: 500;
-  color: #555;
-  margin-bottom: 0.25rem;
-}
-
-.qr-checkbox {
-  width: auto !important;
-  height: auto !important;
-  cursor: pointer;
-  transform: scale(1.2);
-  margin: 0;
-}
-
-/* Text Fields Section */
-.text-fields-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  gap: 1rem;
-}
-
-.add-field-btn {
-  background-color: #28a745;
-  color: white;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: background-color 0.2s;
-}
-
-.add-field-btn:hover {
-  background-color: #218838;
-}
-
-.no-fields {
-  padding: 2rem;
-  text-align: center;
-  background-color: #f8f9fa;
-  border: 2px dashed #ddd;
-  border-radius: 4px;
-  color: #999;
-}
-
-.text-field-item {
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background-color: #f8f9fa;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-}
-
-.field-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid #e0e0e0;
-}
-
-.field-header strong {
-  color: #333;
-  font-size: 1rem;
-}
-
-.remove-field-btn {
-  background-color: #dc3545;
-  color: white;
-  padding: 0.4rem 0.8rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition: background-color 0.2s;
-}
-
-.remove-field-btn:hover {
-  background-color: #c82333;
-}
-
-.text-field-item label {
-  margin-bottom: 0.75rem;
-}
-
-/* Text Field Controls - Single Row Layout */
-.text-field-controls {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  margin-top: 0.5rem;
-}
-
-.control-item {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 0;
-}
-
-.control-item input,
-.control-item select {
-  width: 100%;
-}
-
-/* Flexible width items (Esquerda, Topo, Tamanho) */
-.control-flex {
-  flex: 1;
-  min-width: 0;
-}
-
-/* Fixed width for font family */
-.control-font {
-  width: 200px;
-  flex-shrink: 0;
-}
-
-/* Fixed width for color */
-.control-color {
-  width: 60px;
-  flex-shrink: 0;
-}
-
-.control-color input[type="color"] {
-  height: 42px;
-  padding: 0.25rem;
-}
-
-/* Format buttons container */
-.control-format {
-  flex-shrink: 0;
-}
-
-.control-format .format-buttons {
-  margin-top: 0.25rem;
-}
-
-/* Formatting Buttons */
-.formatting-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 1rem;
-  padding: 0.75rem;
-  background-color: white;
-  border-radius: 4px;
-  border: 1px solid #ddd;
-}
-
-.format-label {
-  margin: 0;
-  font-weight: 600;
-  color: #555;
-}
-
-.format-buttons {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.format-btn {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: white;
-  border: 2px solid #ccc;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1.1rem;
-  font-weight: 600;
-  transition: all 0.2s;
-  color: #555;
-}
-
-.format-btn:hover:not(:disabled) {
-  border-color: #999;
-  background-color: #f5f5f5;
-}
-
-.format-btn.active {
-  background-color: #0066cc;
-  border-color: #0066cc;
-  color: white;
-}
-
-.format-btn:active:not(:disabled) {
-  transform: scale(0.95);
-}
-
-.format-btn:disabled,
-.format-btn.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  background-color: #f5f5f5;
-  border-color: #ddd;
-}
-
-.format-btn strong,
-.format-btn em,
-.format-btn span {
-  pointer-events: none;
-}
-
-/* Custom Fonts Section */
-.upload-font {
-  margin-bottom: 1rem;
-}
-
-.upload-font-btn {
-  display: inline-block;
-  padding: 0.75rem 1.5rem;
-  background-color: #6c757d;
-  color: white;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-
-.upload-font-btn:hover {
-  background-color: #5a6268;
-}
-
-.upload-font-btn input[type="file"] {
-  display: none;
-}
-
-.font-loading {
-  padding: 0.75rem;
-  background-color: #fff3cd;
-  border-left: 4px solid #ffc107;
-  border-radius: 4px;
-  color: #856404;
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.font-error {
-  padding: 0.75rem;
-  background-color: #f8d7da;
-  border-left: 4px solid #dc3545;
-  border-radius: 4px;
-  color: #721c24;
-  margin-bottom: 1rem;
-}
-
-.custom-fonts-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.custom-font-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem;
-  background-color: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.custom-font-item:hover {
-  background-color: #f8f9fa;
-}
-
-.custom-font-item span {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 500;
-  color: #333;
-}
-
-.custom-font-item button {
-  padding: 0.4rem 0.8rem;
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  transition: background-color 0.2s;
-}
-
-.custom-font-item button:hover {
-  background-color: #c82333;
-}
-
-.no-fonts {
-  padding: 1.5rem;
-  text-align: center;
-  background-color: #f8f9fa;
-  border: 2px dashed #ddd;
-  border-radius: 4px;
-  color: #999;
-  font-style: italic;
-}
-
-.data-source-separator {
-  display: flex;
-  align-items: center;
-  text-align: center;
-  color: #999;
-  margin: 1rem 0;
-}
-.data-source-separator::before,
-.data-source-separator::after {
-  content: '';
-  flex: 1;
-  border-bottom: 1px solid #ddd;
-}
-.data-source-separator:not(:empty)::before {
-  margin-right: .25em;
-}
-.data-source-separator:not(:empty)::after {
-  margin-left: .25em;
-}
-.csv-info {
-  margin-top: 0.5rem;
-  display: block;
-  color: #0066cc;
-}
-
-.export-option-label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-weight: 500;
-  color: #555;
-  flex: 1;
-  min-width: 200px;
-}
-
-/* Tab Navigation Styles */
-.tab-navigation {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-  border-bottom: 2px solid #e0e0e0;
-}
-
-.tab-button {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
-  color: #666;
-  font-weight: 500;
-  font-size: 0.95rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-  bottom: -2px;
-}
-
-.tab-button:hover {
-  background: #f5f5f5;
-  color: #333;
-}
-
-.tab-button.active {
-  color: #0066cc;
-  border-bottom-color: #0066cc;
-  background: #f0f8ff;
-  font-weight: 600;
-}
-
-.tab-content {
-  animation: fadeIn 0.3s ease-in;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Enhanced CSV Info */
-.csv-info {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-  display: block;
-  color: #0066cc;
-  background-color: #e7f3ff;
-  border-left: 4px solid #0066cc;
-  border-radius: 4px;
-  font-size: 0.9rem;
-}
-
-/* Template file styling for batch tab */
-.tab-content .template-control {
-  margin-top: 0;
-}
-
-.tab-content .template-file input[type="file"] {
-  cursor: pointer;
-}
-
-.tab-content .template-file input[type="file"]::-webkit-file-upload-button {
-  background-color: #0066cc;
-  color: white;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-
-.tab-content .template-file input[type="file"]::-webkit-file-upload-button:hover {
-  background-color: #0052a3;
-}
-
-/* Manual tab textarea styling */
-.tab-content textarea {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.9rem;
-  line-height: 1.5;
-}
-
-/* QR Code Settings - Basic and Advanced */
-.qr-basic-settings {
-  margin-bottom: 0.5rem;
-}
-
-.advanced-toggle {
-  margin: 0.75rem 0 0.5rem 0;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.advanced-toggle::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(to right, #ddd, transparent);
-}
-
-.advanced-toggle-btn {
-  background: none;
-  border: none;
-  padding: 0.25rem 0;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: #6c757d;
-  text-align: left;
-  transition: color 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  white-space: nowrap;
-}
-
-.advanced-toggle-btn:hover {
-  color: #495057;
-}
-
-.advanced-toggle-btn:active {
-  color: #0066cc;
-}
-
-.qr-advanced-settings {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-  background-color: #f8f9fa;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  animation: expandDown 0.3s ease-out;
-}
-
-@keyframes expandDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Responsive adjustments for QR controls */
-@media (max-width: 768px) {
-  .qr-controls-row {
-    flex-wrap: wrap;
-  }
-  
-  .qr-control {
-    min-width: calc(50% - 0.375rem);
-  }
-  
-  .qr-text-controls-row {
-    flex-wrap: wrap;
-  }
-  
-  .qr-text-control {
-    min-width: calc(50% - 0.375rem);
-  }
-}
-</style>
