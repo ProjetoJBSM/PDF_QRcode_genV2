@@ -9,121 +9,105 @@
   <form @submit.prevent class="form-section" :class="{ 'form-section--fullscreen': view === 'loader' }">
       <fieldset v-if="view === 'loader'">
         <legend>Dados</legend>
-        
-        <!-- Tab Navigation -->
-        <div class="tab-navigation">
-          <button 
-            type="button" 
-            class="tab-button" 
-            :class="{ active: activeTab === 'manual' }"
-            @click="activeTab = 'manual'"
-          >
-            Geração Manual
-          </button>
-          <button 
-            type="button" 
-            class="tab-button" 
-            :class="{ active: activeTab === 'batch' }"
-            @click="activeTab = 'batch'"
-          >
-            Geração em Batch
-          </button>
-        </div>
 
-        <!-- Manual Generation Tab -->
-        <div v-show="activeTab === 'manual'" class="tab-content">
-          <label>
-            Conteúdo do QR Code
-            <textarea
-              v-model="manualInput"
-              placeholder="Digite a URL ou texto para o QR Code&#10;Exemplo: https://example.com"
-              rows="3"
-            ></textarea>
-          </label>
-          <p class="small" style="margin-top: 0.5rem; color: #666;">
-            Insira uma URL ou texto para gerar um único QR Code. Será gerado um PDF de uma página.
-          </p>
-        </div>
+        <!-- Left column: settings -->
+          <div class="loader-left">
+            <!-- Tab Navigation -->
+            <div class="tab-navigation">
+              <button 
+                type="button" 
+                class="tab-button" 
+                :class="{ active: activeTab === 'manual' }"
+                @click="activeTab = 'manual'"
+              >
+                Geração Manual
+              </button>
+              <button 
+                type="button" 
+                class="tab-button" 
+                :class="{ active: activeTab === 'batch' }"
+                @click="activeTab = 'batch'"
+              >
+                Geração em Batch
+              </button>
+            </div>
 
-        <!-- Batch Generation Tab -->
-        <div v-show="activeTab === 'batch'" class="tab-content">
-          <label class="template-control template-file">
-            Carregar arquivo CSV
-            <input
-              type="file"
-              accept=".csv"
-              @change="handleCsvUpload"
-            />
-            <span v-if="csvFileName" class="csv-info small">
-              Arquivo carregado: <strong>{{ csvFileName }}</strong> ({{ csvData.length }} URLs encontradas)
-            </span>
-          <div v-if="csvData.length > 0" class="csv-column-select" style="margin-top: 1rem;">
-            <label for="qrColumnSelect" style="font-weight: 600;">
-              1. Selecione a coluna para o QR Code:
-            </label>
-            <select id="qrColumnSelect" v-model="qrDataColumn" style="width: 100%; margin-top: 0.25rem;">
-              <option :value="null" disabled>-- Escolha a coluna com as URLs/textos --</option>
-              <option v-for="col in csvPreviewColumns" :key="col" :value="col">
-                {{ col }}
-              </option>
-            </select>
-            <p v-if="!qrDataColumn" class="small" style="color: #dc3545; margin-top: 0.25rem;">
-              ⚠️ É necessário selecionar uma coluna para continuar.
-            </p>
-          </div>
-          </label>
+            <!-- Manual Generation Tab -->
+            <div v-show="activeTab === 'manual'" class="tab-content">
+              <label>
+                Conteúdo do QR Code
+                <textarea
+                  v-model="manualInput"
+                  placeholder="Digite a URL ou texto para o QR Code&#10;Exemplo: https://example.com"
+                  rows="3"
+                ></textarea>
+              </label>
+              <p class="small" style="margin-top: 0.5rem; color: #666;">
+                Insira uma URL ou texto para gerar um único QR Code. Será gerado um PDF de uma página.
+              </p>
+            </div>
 
-          <!-- tabela de visualização de CSV -->
-          <div v-if="csvData.length" class="csv-preview" style="margin-top:0.75rem;">
-            <div class="small" style="margin-bottom:0.25rem; display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
-              <div>Preview do CSV — mostrando primeiras {{ csvPreviewRows.length }} linhas ({{ csvData.length }} no total)</div>
-              <div style="display:flex; align-items:center; gap:0.5rem;">
-                <label class="small" style="display:flex; align-items:center; gap:0.35rem;">Mostrar
-                  <select v-model.number="previewCount" style="font-size:0.9rem; padding:2px 6px;">
-                    <option :value="5">5</option>
-                    <option :value="10">10</option>
-                    <option :value="25">25</option>
-                    <option :value="50">50</option>
-                    <option :value="100">100</option>
-                  </select>
+            <!-- Batch Generation Tab -->
+            <div v-show="activeTab === 'batch'" class="tab-content">
+              <label class="template-control template-file">
+                Carregar arquivo CSV
+                <input
+                  ref="csvFileInput"
+                  type="file"
+                  accept=".csv"
+                  @change="handleCsvUpload"
+                />
+                <span v-if="csvFileName" class="csv-info small">
+                  Arquivo carregado: <strong>{{ csvFileName }}</strong> ({{ csvData.length }} linhas)
+                </span>
+              </label>
+
+              <div v-if="csvData.length > 0" class="csv-column-select" style="margin-top: 1rem;">
+                <label for="qrColumnSelect" style="font-weight: 600;">
+                  1. Selecione a coluna para o QR Code:
                 </label>
+                <select id="qrColumnSelect" v-model="qrDataColumn" style="width: 100%; margin-top: 0.25rem;">
+                  <option :value="null" disabled>-- Escolha a coluna com as URLs/textos --</option>
+                  <option v-for="col in csvPreviewColumns" :key="col" :value="col">
+                    {{ col }}
+                  </option>
+                </select>
+                <p v-if="!qrDataColumn" class="small" style="color: #dc3545; margin-top: 0.25rem;">
+                  ⚠️ É necessário selecionar uma coluna para continuar.
+                </p>
               </div>
+
+              <!-- Range selection for batch rows -->
+              <div v-if="csvData.length > 0" class="range-selection" style="margin-top:1rem;">
+                <label style="font-weight:600; display:block;">Linhas para gerar (ex.: 1-10,14,18-22)</label>
+                <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
+                  <input type="text" v-model="rangeSpec" placeholder="1-10,14,18-22" style="flex:1; min-width:0; padding:8px;" />
+                  <button type="button" class="secondary" @click="setRangeAll">Todas</button>
+                </div>
+                <p class="small" style="margin-top:0.25rem; color:#666;">Use sintaxe de intervalo (impressão): <code>1-10,14,18-22</code>. Valores baseados em 1 (primeira linha = 1). Use <code>all</code> ou deixe vazio para todas.</p>
+                <p v-if="rangeError" class="small" style="color:#dc3545; margin-top:0.25rem;">{{ rangeError }}</p>
+              </div>
+
+              <p class="small" style="margin-top: 0.5rem; color: #666;">
+                Para gerar ZIP com nomes personalizados, adicione também a coluna <strong>"nome_arquivo"</strong>.
+              </p>
+              
+              <label class="export-option-label" style="margin-top: 1rem;">
+                Formato de Saída
+                <select v-model="exportOption">
+                  <option value="single_pdf">PDF Único com várias páginas</option>
+                  <option value="multiple_pdfs_zip">ZIP com um PDF por página</option>
+                </select>
+              </label>
             </div>
-            <div class="csv-table-wrapper" style="overflow:auto; max-width:100%; border:1px solid #e3e3e3; border-radius:4px;">
-              <table style="border-collapse:collapse; width:100%; min-width:400px;">
-                <thead style="background:#fafafa;">
-                  <tr>
-                    <th v-for="col in csvPreviewColumns" :key="col" style="text-align:left; padding:6px 8px; border-bottom:1px solid #eee;">{{ col }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(r, idx) in csvPreviewRows" :key="idx">
-                    <td v-for="col in csvPreviewColumns" :key="col + '-' + idx" style="padding:6px 8px; border-bottom:1px solid #f5f5f5;">{{ r[col] }}</td>
-                  </tr>
-                </tbody>
-              </table>
+
+            <div style="margin-top:1rem; display:flex; gap:0.5rem; align-items:center;">
+              <button type="button" class="primary" @click="goToEditor">Editar Template →</button>
+              <button type="button" class="secondary" @click="clearCsvData">Limpar CSV</button>
             </div>
-            <div v-if="csvPreviewRemaining > 0" class="small" style="margin-top:0.4rem; color:#666;">... e mais {{ csvPreviewRemaining }} linhas</div>
           </div>
-          <p class="small" style="margin-top: 0.5rem; color: #666;">
-            Para gerar ZIP com nomes personalizados, adicione também a coluna <strong>"nome_arquivo"</strong>.
-          </p>
-          
-          <label class="export-option-label" style="margin-top: 1rem;">
-            Formato de Saída
-            <select v-model="exportOption">
-              <option value="single_pdf">PDF Único com várias páginas</option>
-              <option value="multiple_pdfs_zip">ZIP com um PDF por página</option>
-            </select>
-          </label>
-        </div>
-        
-        <!-- Template controls and page-size moved to editor view -->
       </fieldset>
-      <!-- Loader actions: show button to proceed to editor when on loader view -->
-      <div v-if="view === 'loader'" class="loader-actions" style="margin: 1rem 0;">
-        <button type="button" class="primary" @click="goToEditor">Editar Template →</button>
-      </div>
+      <!-- (button removed - moved inside loader left column to avoid duplication) -->
 
       <div v-if="view === 'editor'">
         <div class="editor-topbar" style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem;">
@@ -178,18 +162,27 @@
         <!-- Basic QR Settings - Always Visible -->
         <div class="qr-basic-settings">
           <div class="qr-controls-row">
-            <label class="qr-control qr-size">
-              Tamanho do QR (pt)
-              <input v-model.number="qrSize" type="number" min="30" />
-            </label>
-            <label class="qr-control qr-position">
-              Posição X - Esquerda (pt)
-              <input v-model.number="posX" type="number" min="0" />
-            </label>
-            <label class="qr-control qr-position">
-              Posição Y - Topo (pt)
-              <input v-model.number="posY" type="number" min="0" />
-            </label>
+                <label class="qr-control qr-size">
+                  Tamanho do QR (pt)
+                  <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <input v-model.number="qrSize" type="range" min="30" max="1000" step="1" @input="onSliderChange" @change="generatePreview" />
+                    <span class="small">{{ qrSize }} pt</span>
+                  </div>
+                </label>
+                <label class="qr-control qr-position">
+                  Posição X - Esquerda (pt)
+                  <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <input v-model.number="posX" type="range" min="0" max="2000" step="1" @input="onSliderChange" @change="generatePreview" />
+                    <span class="small">{{ posX }} pt</span>
+                  </div>
+                </label>
+                <label class="qr-control qr-position">
+                  Posição Y - Topo (pt)
+                  <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <input v-model.number="posY" type="range" min="0" max="2000" step="1" @input="onSliderChange" @change="generatePreview" />
+                    <span class="small">{{ posY }} pt</span>
+                  </div>
+                </label>
             <label class="qr-text-control qr-color">
               Cor do QR Code
               <input v-model="qrColor" type="color" />
@@ -271,14 +264,20 @@
             <div class="small">Ex.: {{ csvData[0] && field.bindColumn ? csvData[0][field.bindColumn] : '-' }}</div>
           </div>
 
-          <div class="text-field-controls">
+            <div class="text-field-controls">
             <label class="control-item control-flex">
               Esquerda (pt)
-              <input v-model.number="field.x" type="number" min="0" />
+              <div style="display:flex; gap:0.5rem; align-items:center;">
+                <input v-model.number="field.x" type="range" min="0" max="2000" step="1" @input="onSliderChange" @change="generatePreview" />
+                <span class="small">{{ field.x || 0 }}</span>
+              </div>
             </label>
             <label class="control-item control-flex">
               Topo (pt)
-              <input v-model.number="field.y" type="number" min="0" />
+              <div style="display:flex; gap:0.5rem; align-items:center;">
+                <input v-model.number="field.y" type="range" min="0" max="2000" step="1" @input="onSliderChange" @change="generatePreview" />
+                <span class="small">{{ field.y || 0 }}</span>
+              </div>
             </label>
             <label class="control-item control-font">
               Família da Fonte
@@ -295,7 +294,9 @@
             </label>
             <label class="control-item control-flex">
               Tamanho (pt)
-              <input v-model.number="field.size" type="number" min="6" max="200" />
+              <div style="display:flex; gap:0.5rem; align-items:center;">
+                <input v-model.number="field.size" type="number" min="6" step="1" @change="generatePreview" />
+              </div>
             </label>
             <label class="control-item control-color">
               Cor
@@ -407,6 +408,42 @@
       </div>
       </form>
 
+      <!-- CSV preview shown in the right column when on loader view -->
+      <div v-if="view === 'loader'" class="loader-preview-column">
+        <div v-if="csvData.length" class="csv-preview" style="margin-top:0;">
+          <div class="small" style="margin-bottom:0.5rem; display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+            <div>Preview do CSV — mostrando primeiras {{ csvPreviewRows.length }} linhas ({{ selectedCsvData.length }} no total)</div>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <label class="small" style="display:flex; align-items:center; gap:0.35rem;">Mostrar
+                <select v-model.number="previewCount" style="font-size:0.9rem; padding:2px 6px;">
+                  <option :value="5">5</option>
+                  <option :value="10">10</option>
+                  <option :value="25">25</option>
+                  <option :value="50">50</option>
+                  <option :value="100">100</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="csv-table-wrapper" style="overflow:auto; max-width:100%; border:1px solid #e3e3e3; border-radius:4px;">
+            <table style="border-collapse:collapse; width:100%; min-width:400px;">
+              <thead style="background:#fafafa;">
+                <tr>
+                  <th v-for="col in csvPreviewColumns" :key="col" style="text-align:left; padding:6px 8px; border-bottom:1px solid #eee;">{{ col }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(r, idx) in csvPreviewRows" :key="idx">
+                  <td v-for="col in csvPreviewColumns" :key="col + '-' + idx" style="padding:6px 8px; border-bottom:1px solid #f5f5f5;">{{ r[col] }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-if="csvPreviewRemaining > 0" class="small" style="margin-top:0.4rem; color:#666;">... e mais {{ csvPreviewRemaining }} linhas</div>
+        </div>
+        <div v-else class="csv-empty-placeholder" style="padding:1rem; color:#666;">Nenhum CSV carregado — carregue um arquivo para visualizar</div>
+      </div>
+
       <!-- Live Preview Section (only in editor view) -->
       <div class="preview-section" v-if="view === 'editor'">
         <h2>Pré-visualização em Tempo Real</h2>
@@ -414,14 +451,12 @@
           <span class="small">Primeira página • Atualiza automaticamente  •  Ctrl + rolagem do mouse para zoom na página</span>
         </div>
         <div class="preview-container">
-          <iframe 
-            v-if="previewUrl" 
-            :src="previewUrl + '#view=Fit&toolbar=0&navpanes=0'" 
-            class="pdf-preview"
-          ></iframe>
-          <div v-else class="preview-placeholder">
-            <p>A pré-visualização aparecerá aqui</p>
-            <p class="small">Cole pelo menos uma URL para começar</p>
+          <!-- Live DOM preview: lightweight layout-only rendering for snappy feedback -->
+          <div ref="livePreviewContainer" class="live-preview-wrapper" style="width:100%; display:flex; justify-content:center;">
+            <div v-if="!canShowLivePreview" class="preview-placeholder">
+              <p>A pré-visualização aparecerá aqui</p>
+              <p class="small">Cole pelo menos uma URL ou carregue um CSV para começar</p>
+            </div>
           </div>
         </div>
       </div>
@@ -438,6 +473,7 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import Papa from 'papaparse'
 import JSZip from 'jszip'
+import './style.css'
 
 // Algumas builds do pacote 'qrcodejs' (npm) não expõem a propriedade "CorrectLevel".
 // Definimos manualmente o mapeamento de níveis ECC conforme implementação original:
@@ -448,6 +484,9 @@ const QR_CORRECT_LEVEL = { L: 1, M: 0, Q: 3, H: 2 }
 // Debounce helper
 let previewTimeout = null
 
+// Quick slider debounce interval (ms) — small for snappy feedback
+const SLIDER_DEBOUNCE_MS = 80
+
 // Data refs
 const activeTab = ref('manual') // 'manual' or 'batch'
 const manualInput = ref('') // Input for manual generation
@@ -456,6 +495,9 @@ const csvData = ref([]) //teste de correcao
 const csvFileName = ref('')
 const previewCount = ref(50)
 const qrDataColumn = ref(null)
+const rangeSpec = ref('')
+const rangeError = ref('')
+const previewSelectedOnly = ref(true)
 const pageSize = ref('A4')
 const pageRotation = ref(0) // 0, 90, 180, 270
 const customW = ref(595)
@@ -508,6 +550,14 @@ const downloadUrl = ref('')
 const urlCount = ref(0)
 const status = ref('')
 const previewUrl = ref('')
+const livePreviewContainer = ref(null)
+const canShowLivePreview = computed(() => {
+  // show live preview when we have at least one data source (manual or csv)
+  return (
+    (activeTab.value === 'manual' && manualInput.value && manualInput.value.trim()) ||
+    (activeTab.value === 'batch' && csvData.value && csvData.value.length > 0)
+  )
+})
 
 // UI state
 const showAdvancedQR = ref(false)
@@ -547,10 +597,80 @@ const csvPreviewColumns = computed(() => {
 })
 
 const csvPreviewRows = computed(() => {
-  return csvData.value ? csvData.value.slice(0, previewCount.value) : []
+  if (!csvData.value || csvData.value.length === 0) return []
+  // previewSelectedOnly is always true (hidden setting) — show selected rows
+  const sel = selectedCsvData.value || []
+  return sel.slice(0, previewCount.value)
 })
 
-const csvPreviewRemaining = computed(() => Math.max(0, (csvData.value ? csvData.value.length : 0) - csvPreviewRows.value.length))
+const csvPreviewRemaining = computed(() => {
+  const total = previewSelectedOnly.value ? (selectedCsvData.value ? selectedCsvData.value.length : 0) : (csvData.value ? csvData.value.length : 0)
+  return Math.max(0, total - csvPreviewRows.value.length)
+})
+
+// Parse printing-style range spec like "1-10,14,18-22" and return selected rows
+function parseRangeSpec(spec, max) {
+  const out = []
+  const used = new Set()
+  rangeError.value = ''
+  if (!spec || String(spec).trim() === '') {
+    // default: all
+    for (let i = 0; i < max; i++) used.add(i)
+    return Array.from(used).sort((a,b)=>a-b)
+  }
+
+  const s = String(spec).trim()
+  if (s === '*' || s.toLowerCase() === 'all') {
+    for (let i = 0; i < max; i++) used.add(i)
+    return Array.from(used).sort((a,b)=>a-b)
+  }
+
+  const parts = s.split(',')
+  const errors = []
+  for (let part of parts) {
+    part = part.trim()
+    if (!part) continue
+    const m = part.match(/^(\d+)\s*-\s*(\d+)$/)
+    if (m) {
+      let a = parseInt(m[1], 10)
+      let b = parseInt(m[2], 10)
+      // interpret as 1-based ranges; convert to 0-based
+      let start = Math.min(a, b) - 1
+      let end = Math.max(a, b) - 1
+      if (isNaN(start) || isNaN(end)) { errors.push(part); continue }
+      if (end < 0 || start > max - 1) continue
+      start = Math.max(0, start)
+      end = Math.min(max - 1, end)
+      for (let i = start; i <= end; i++) used.add(i)
+    } else if (/^\d+$/.test(part)) {
+      let n = parseInt(part, 10)
+      let idx = n - 1 // 1-based
+      if (isNaN(idx)) { errors.push(part); continue }
+      if (idx < 0) idx = 0
+      if (idx > max - 1) continue
+      used.add(idx)
+    } else {
+      errors.push(part)
+    }
+  }
+
+  if (errors.length > 0) {
+    rangeError.value = 'Aviso: tokens inválidos ignorados: ' + errors.join(', ')
+  } else {
+    rangeError.value = ''
+  }
+
+  return Array.from(used).sort((a,b)=>a-b)
+}
+
+// Computed subset of CSV data based on the printing-style range spec
+const selectedCsvData = computed(() => {
+  if (!csvData.value || csvData.value.length === 0) return []
+  const max = csvData.value.length
+  const indices = parseRangeSpec(rangeSpec.value, max)
+  if (!indices || indices.length === 0) return []
+  return indices.map(i => csvData.value[i]).filter(Boolean)
+})
 
 // Rotate page by 90 degrees
 const rotatePage = () => {
@@ -845,8 +965,11 @@ const handleCsvUpload = (event) => {
         csvData.value = results.data; // Apenas carrega os dados
         csvFileName.value = file.name
         activeTab.value = 'batch'
-        qrDataColumn.value = null 
-        
+  qrDataColumn.value = null
+  // initialize range selection to full CSV (printing-style)
+  rangeSpec.value = `1-${csvData.value.length}`
+  rangeError.value = ''
+
         if (csvData.value.length > 0) {
           generatePreview()
         }
@@ -860,6 +983,30 @@ const handleCsvUpload = (event) => {
   })
 }
 
+// Convenience: set range to all rows
+const setRangeAll = () => {
+  if (csvData.value && csvData.value.length > 0) {
+    rangeSpec.value = `1-${csvData.value.length}`
+    rangeError.value = ''
+  }
+}
+
+// Called on slider input for fast, debounced preview updates
+const onSliderChange = () => {
+  try {
+    // immediate lightweight live preview
+    try { renderLivePreview() } catch (e) { /* ignore */ }
+
+    // debounce full PDF preview
+    clearTimeout(previewTimeout)
+    previewTimeout = setTimeout(() => {
+      generatePreview()
+    }, SLIDER_DEBOUNCE_MS)
+  } catch (err) {
+    // ignore
+  }
+}
+
 //para limpar o espaço do csv
 const csvFileInput = ref(null); // Adicione esta ref no topo do script junto com as outras
 const clearCsvData = () => {
@@ -871,6 +1018,8 @@ const clearCsvData = () => {
   csvData.value = [];
   csvFileName.value = '';
   exportOption.value = 'single_pdf';
+  rangeSpec.value = ''
+  rangeError.value = ''
   
   // Limpa o valor do input de arquivo para que o usuário possa carregar o mesmo arquivo novamente
   if (csvFileInput.value) {
@@ -936,6 +1085,187 @@ const getPageDimensions = () => {
   return { width: baseW, height: baseH }
 }
 
+// (Removed page-based clamping — user requested unconstrained controls so values are fully editable)
+
+// Utility: generate a recolored PNG data URL from the QR library canvas
+const generateQrDataUrl = async (text, size) => {
+  const holder = document.createElement('div')
+  // keep offscreen
+  holder.style.position = 'absolute'
+  holder.style.left = '-9999px'
+  holder.style.top = '-9999px'
+  document.body.appendChild(holder)
+
+  const QR = resolveQRCodeCtor()
+  if (!QR) {
+    document.body.removeChild(holder)
+    return null
+  }
+
+  const qr = new QR(holder, {
+    text: text || '',
+    width: size,
+    height: size,
+    correctLevel: QR_CORRECT_LEVEL[ecc.value]
+  })
+
+  // allow render
+  await tick()
+
+  const canvas = holder.querySelector('canvas')
+  if (!canvas) {
+    document.body.removeChild(holder)
+    return null
+  }
+
+  // Create a working canvas to produce transparent background and colored modules
+  const tmp = document.createElement('canvas')
+  tmp.width = canvas.width
+  tmp.height = canvas.height
+  const tctx = tmp.getContext('2d')
+  tctx.clearRect(0, 0, tmp.width, tmp.height)
+  tctx.drawImage(canvas, 0, 0)
+
+  const imageData = tctx.getImageData(0, 0, tmp.width, tmp.height)
+  const data = imageData.data
+
+  // parse target color
+  const hexColor = (qrColor.value || '#000000').replace('#', '')
+  const rc = parseInt(hexColor.substring(0, 2), 16)
+  const gc = parseInt(hexColor.substring(2, 4), 16)
+  const bc = parseInt(hexColor.substring(4, 6), 16)
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i]
+    const g = data[i + 1]
+    const b = data[i + 2]
+    const a = data[i + 3]
+
+    // If pixel is nearly white (background), make it transparent
+    const isWhite = (r > 200 && g > 200 && b > 200) || a === 0
+    if (isWhite) {
+      if (qrBackground.value) {
+        // keep white background as opaque white
+        data[i] = 255
+        data[i + 1] = 255
+        data[i + 2] = 255
+        data[i + 3] = 255
+      } else {
+        data[i + 3] = 0
+      }
+    } else {
+      // dark module — recolor and ensure opaque
+      data[i] = rc
+      data[i + 1] = gc
+      data[i + 2] = bc
+      data[i + 3] = 255
+    }
+  }
+
+  tctx.putImageData(imageData, 0, 0)
+
+  // Optionally add padding for quiet zone
+  const pad = Math.max(0, Math.round((margin.value || 0) * (tmp.width / 41)))
+  if (pad > 0) {
+    const padded = document.createElement('canvas')
+    padded.width = tmp.width + pad * 2
+    padded.height = tmp.height + pad * 2
+    const pctx = padded.getContext('2d')
+    if (qrBackground.value) {
+      pctx.fillStyle = '#fff'
+      pctx.fillRect(0, 0, padded.width, padded.height)
+    }
+    pctx.drawImage(tmp, pad, pad)
+    const dataUrl = padded.toDataURL('image/png')
+    document.body.removeChild(holder)
+    return dataUrl
+  }
+
+  const dataUrl = tmp.toDataURL('image/png')
+  document.body.removeChild(holder)
+  return dataUrl
+}
+
+// Render a lightweight DOM preview (layout-only) into the livePreviewContainer
+const renderLivePreview = async () => {
+  if (!livePreviewContainer.value) return
+  const container = livePreviewContainer.value
+  // clear existing content
+  container.innerHTML = ''
+
+  if (!canShowLivePreview.value) {
+    return
+  }
+
+  const dims = getPageDimensions()
+  const pageW = dims.width
+  const pageH = dims.height
+
+  // wrapper to center the page and allow scaling
+  const pageWrap = document.createElement('div')
+  pageWrap.style.width = pageW + 'px'
+  pageWrap.style.height = pageH + 'px'
+  pageWrap.style.position = 'relative'
+  pageWrap.style.boxShadow = '0 2px 6px rgba(0,0,0,0.12)'
+  pageWrap.style.backgroundColor = backgroundColor.value || '#fff'
+  pageWrap.style.overflow = 'hidden'
+  pageWrap.style.border = '1px solid #ddd'
+
+  // If template image is available, use it as background
+  if (state.value.templateType === 'image' && state.value.templateImage) {
+    pageWrap.style.backgroundImage = `url(${state.value.templateImage.src})`
+    pageWrap.style.backgroundSize = 'contain'
+    pageWrap.style.backgroundRepeat = 'no-repeat'
+    pageWrap.style.backgroundPosition = 'center'
+  }
+
+  container.appendChild(pageWrap)
+
+  // Determine sample data row for filling fields/QR
+  let sampleRow = null
+  if (activeTab.value === 'batch' && csvData.value.length > 0) {
+    sampleRow = selectedCsvData.value && selectedCsvData.value.length > 0 ? selectedCsvData.value[0] : csvData.value[0]
+  } else if (activeTab.value === 'manual') {
+    sampleRow = { valor: manualInput.value }
+  }
+
+  // Add QR (as an image) — generate a recolored PNG quickly
+  try {
+    const qrText = activeTab.value === 'manual' ? (manualInput.value || '') : (sampleRow ? (sampleRow[qrDataColumn.value] || '') : '')
+    if (qrText) {
+      const dataUrl = await generateQrDataUrl(qrText, Math.round(qrSize.value || 180))
+      if (dataUrl) {
+        const img = document.createElement('img')
+        img.src = dataUrl
+        img.style.position = 'absolute'
+        img.style.left = (posX.value || 0) + 'px'
+        img.style.top = (posY.value || 0) + 'px'
+        img.style.width = (qrSize.value || 180) + 'px'
+        img.style.height = (qrSize.value || 180) + 'px'
+        img.style.pointerEvents = 'none'
+        pageWrap.appendChild(img)
+      }
+    }
+  } catch (err) {
+    console.warn('Erro ao gerar QR preview:', err)
+  }
+
+  // Add text fields
+  for (const field of textFields.value) {
+    const div = document.createElement('div')
+    div.textContent = field.useColumn && sampleRow && field.bindColumn ? (sampleRow[field.bindColumn] || '') : (field.text || '')
+    div.style.position = 'absolute'
+    div.style.left = (field.x || 0) + 'px'
+    div.style.top = (field.y || 0) + 'px'
+    div.style.fontSize = (field.size || 14) + 'px'
+    div.style.color = field.color || '#000'
+    div.style.whiteSpace = 'pre-wrap'
+    div.style.pointerEvents = 'none'
+    pageWrap.appendChild(div)
+  }
+}
+
+
 // Auto-update preview when parameters change
 watchEffect(() => {
   // Watch all reactive values
@@ -966,11 +1296,14 @@ watchEffect(() => {
     ...customFonts.value.map(f => f.name)
   ]
 
-  // Debounce the preview generation
+  // Render lightweight live preview immediately (fast)
+  try { renderLivePreview() } catch (e) { /* ignore */ }
+
+  // Debounce the full preview generation (slower, heavy)
   clearTimeout(previewTimeout)
   previewTimeout = setTimeout(() => {
     generatePreview()
-  }, 500) // Wait 500ms after last change
+  }, 600) // Wait 600ms after last change for full PDF preview
 })
 
 // Generate Preview (first page only)
@@ -1144,12 +1477,19 @@ const startGeneration = async () => {
     status.value = 'Erro: Por favor, selecione a coluna que contém os dados do QR Code.';
     return;
     }
-    if (exportOption.value === 'single_pdf') {
-      // Passa os objetos CSV (para permitir preencher campos via colunas)
-      await generateSinglePDF(csvData.value);
-    } else if (exportOption.value === 'multiple_pdfs_zip') {
-      await generateZipWithMultiplePDFs(csvData.value);
-    }
+      // Use the selected CSV subset based on range controls
+      const subset = selectedCsvData.value || []
+      if (subset.length === 0) {
+        status.value = 'Erro: O intervalo selecionado não contém linhas. Verifique a seleção.'
+        return
+      }
+
+      if (exportOption.value === 'single_pdf') {
+        // Passa os objetos CSV (para permitir preencher campos via colunas)
+        await generateSinglePDF(subset);
+      } else if (exportOption.value === 'multiple_pdfs_zip') {
+        await generateZipWithMultiplePDFs(subset);
+      }
   }
 }
 
@@ -1471,26 +1811,32 @@ const drawQrOnPage = async (pdfDoc, page, urlText, font) => {
   const g = parseInt(hexColor.substring(2, 4), 16)
   const b = parseInt(hexColor.substring(4, 6), 16)
   
-  // Replace black pixels with custom color and handle white pixels
+  // Replace dark modules with custom color and make the background transparent (or white)
   for (let i = 0; i < data.length; i += 4) {
-    // Check if pixel is dark (QR code module)
-    if (data[i] < 128 && data[i + 1] < 128 && data[i + 2] < 128) {
-      data[i] = r     // Red
-      data[i + 1] = g // Green
-      data[i + 2] = b // Blue
-      data[i + 3] = 255 // Fully opaque
-    } else {
-      // White/light pixel
+    const rr = data[i]
+    const gg = data[i + 1]
+    const bb = data[i + 2]
+    const aa = data[i + 3]
+
+    // Consider pixel as background if it's nearly white or fully transparent
+    const isWhite = (rr > 200 && gg > 200 && bb > 200) || aa === 0
+
+    if (isWhite) {
       if (qrBackground.value) {
-        // Keep white background
         data[i] = 255
         data[i + 1] = 255
         data[i + 2] = 255
         data[i + 3] = 255
       } else {
-        // Make transparent
+        // make transparent
         data[i + 3] = 0
       }
+    } else {
+      // module -> recolor
+      data[i] = r
+      data[i + 1] = g
+      data[i + 2] = b
+      data[i + 3] = 255
     }
   }
   
@@ -1565,1107 +1911,3 @@ function resolveQRCodeCtor(){
   return null
 }
 </script>
-
-<style scoped>
-/* Main Layout - Two columns */
-.main-layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-  margin-top: 1.5rem;
-}
-
-.main-layout.loader-view {
-  /* make loader take full width and more vertical space */
-  grid-template-columns: 1fr;
-  align-items: start;
-}
-
-@media (max-width: 1200px) {
-  .main-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Form Section */
-.form-section {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.form-section--fullscreen {
-  width: 100%;
-  max-width: none;
-  min-height: calc(100vh - 140px);
-  background: #fff;
-  padding: 1rem;
-  border-radius: 6px;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.06);
-}
-
-.csv-preview {
-  margin-top: 0.5rem;
-}
-
-.csv-preview .csv-table-wrapper {
-  max-height: 300px; /* taller preview */
-  overflow: auto;
-}
-
-.csv-preview table thead th {
-  position: sticky;
-  top: 0;
-  background: #fafafa;
-  z-index: 2;
-}
-
-.template-info {
-  padding: 0.75rem;
-  background-color: #e7f3ff;
-  border-left: 4px solid #0066cc;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  color: #333;
-}
-
-.actions {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  flex-wrap: wrap;
-  padding-top: 1rem;
-  border-top: 2px solid #eee;
-}
-
-button.primary {
-  background-color: #0066cc;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
-}
-
-button.primary:hover {
-  background-color: #0052a3;
-}
-
-button.secondary {
-  background-color: #6c757d;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
-}
-
-button.secondary:hover {
-  background-color: #5a6268;
-}
-
-.import-btn {
-  background-color: #28a745;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
-  display: inline-block;
-  margin: 0;
-}
-
-.import-btn:hover {
-  background-color: #218838;
-}
-
-.config-actions {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-
-button.secondary {
-  background-color: #6c757d;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
-}
-
-button.secondary:hover {
-  background-color: #5a6268;
-}
-
-.import-btn {
-  background-color: #28a745;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
-  display: inline-block;
-  margin: 0;
-}
-
-.import-btn:hover {
-  background-color: #218838;
-}
-
-.config-actions {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-
-/* Preview Section - Sticky */
-.preview-section {
-  position: sticky;
-  top: 1rem;
-  height: fit-content;
-  max-height: calc(100vh - 2rem);
-  display: flex;
-  flex-direction: column;
-}
-
-.preview-section h2 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.25rem;
-  color: #333;
-}
-
-.preview-info {
-  margin-bottom: 1rem;
-}
-
-.preview-container {
-  flex: 1;
-  min-height: 80vh;
-  max-height: 80vh;
-  border: 2px solid #ddd;
-  border-radius: 8px;
-  overflow: hidden;
-  background-color: #f5f5f5;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.pdf-preview {
-  width: 100%;
-  height: 80vh;
-  border: none;
-  background-color: white;
-}
-
-.preview-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: #999;
-  padding: 2rem;
-  text-align: center;
-}
-
-.preview-placeholder p {
-  margin: 0.5rem 0;
-}
-
-.small {
-  font-size: 0.875rem;
-  color: #666;
-}
-
-/* Improve form readability */
-fieldset {
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 1rem;
-  margin: 0;
-}
-
-legend {
-  font-weight: 600;
-  padding: 0 0.5rem;
-  color: #333;
-}
-
-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #555;
-}
-
-input, select, textarea {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-family: inherit;
-  font-size: 0.95rem;
-}
-
-textarea {
-  min-height: 100px;
-  resize: vertical;
-}
-
-.rotate-btn {
-  max-width: 40px;
-  max-height: 40px;
-  padding: 0.75rem 1rem;
-  background-color: #818181;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1.5rem;
-  font-weight: 400;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-  white-space: nowrap;
-}
-
-.rotate-btn:hover {
-  background-color: #4a4a4a;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(23, 162, 184, 0.3);
-}
-
-.rotate-btn:active {
-  transform: translateY(0) scale(0.98);
-}
-
-/* Template Controls Row */
-.template-controls-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.template-control {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 0;
-}
-
-.template-control input,
-.template-control select {
-  width: 100%;
-}
-
-/* Template file input - flexible */
-.template-file {
-  flex: 1;
-  min-width: 0;
-}
-
-button.secondary {
-  background-color: #6c757d;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
-}
-
-button.secondary:hover {
-  background-color: #5a6268;
-}
-
-.import-btn {
-  background-color: #28a745;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
-  display: inline-block;
-  margin: 0;
-}
-
-.import-btn:hover {
-  background-color: #218838;
-}
-
-.config-actions {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-/* Rotate button - aligned to right */
-.template-rotate {
-  flex-shrink: 0;
-  align-items: flex-end;
-}
-
-.rotate-btn-square {
-  width: 60px;
-  height: 42px;
-  padding: 0;
-  background-color: #818181;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1.5rem;
-  font-weight: 400;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: auto;
-}
-
-.rotate-btn-square:hover {
-  background-color: #4a4a4a;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(23, 162, 184, 0.3);
-}
-
-.rotate-btn-square:active {
-  transform: translateY(0) scale(0.98);
-}
-
-/* Page Controls Row */
-.page-controls-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.page-control {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 0;
-}
-
-.page-control input,
-.page-control select {
-  width: 100%;
-}
-
-/* Page size - flexible */
-.page-size {
-  flex: 1;
-  min-width: 150px;
-}
-
-/* Page dimensions - flexible */
-.page-dimension {
-  flex: 1;
-  min-width: 120px;
-}
-
-/* Background color - fixed 80px */
-.page-bg-color {
-  width: 80px;
-  flex-shrink: 0;
-}
-
-.page-bg-color input[type="color"] {
-  height: 42px;
-  padding: 0.25rem;
-}
-
-.row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-top: 0.5rem;
-}
-
-.inline {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.inline input {
-  width: auto;
-  flex: 1;
-}
-
-input[type="color"] {
-  cursor: pointer;
-  height: 42px;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  font-weight: 500;
-  color: #555;
-  width: 50px;
-}
-
-.checkbox-label input[type="checkbox"] {
-  width: auto;
-  height: auto;
-  cursor: pointer;
-  margin: 0;
-  transform: scale(1.2);
-}
-
-/* QR Controls - Single Row Layout */
-.qr-controls-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.qr-control {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 0;
-}
-
-.qr-control input,
-.qr-control select {
-  width: 100%;
-}
-
-/* QR Size - min 130px, flexible */
-.qr-size {
-  flex: 1;
-  min-width: 130px;
-}
-
-/* Position fields - min 180px, flexible */
-.qr-position {
-  flex: 1.4;
-  min-width: 180px;
-}
-
-/* ECC Level - min 100px, flexible */
-.qr-ecc {
-  flex: 0.8;
-  min-width: 100px;
-}
-
-/* Margin - min 130px, flexible */
-.qr-margin {
-  flex: 1;
-  min-width: 130px;
-}
-
-/* QR Text Controls - Second Row Layout */
-.qr-text-controls-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.qr-text-control {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 0;
-}
-
-.qr-text-control input,
-.qr-text-control select {
-  width: 100%;
-}
-
-/* Render text - min 200px, flexible */
-.qr-render-text {
-  flex: 1;
-  min-width: 200px;
-}
-
-/* Font size - min 200px, flexible */
-.qr-font-size {
-  flex: 1;
-  min-width: 200px;
-}
-
-/* Max chars - min 200px, flexible */
-.qr-max-chars {
-  flex: 1;
-  min-width: 200px;
-}
-
-/* QR Color - min 90px, fixed */
-.qr-color {
-  width: 90px;
-  flex-shrink: 0;
-}
-
-.qr-color input[type="color"] {
-  height: 42px;
-  padding: 0.25rem;
-}
-
-/* Checkbox wrapper - fixed 50px for text width */
-.qr-checkbox-wrapper {
-  width: 50px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.25rem;
-  cursor: pointer;
-}
-
-.checkbox-label-text {
-  font-size: 0.75rem;
-  text-align: center;
-  line-height: 1.1;
-  word-wrap: break-word;
-  font-weight: 500;
-  color: #555;
-  margin-bottom: 0.25rem;
-}
-
-.qr-checkbox {
-  width: auto !important;
-  height: auto !important;
-  cursor: pointer;
-  transform: scale(1.2);
-  margin: 0;
-}
-
-/* Text Fields Section */
-.text-fields-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  gap: 1rem;
-}
-
-.add-field-btn {
-  background-color: #28a745;
-  color: white;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: background-color 0.2s;
-}
-
-.add-field-btn:hover {
-  background-color: #218838;
-}
-
-.no-fields {
-  padding: 2rem;
-  text-align: center;
-  background-color: #f8f9fa;
-  border: 2px dashed #ddd;
-  border-radius: 4px;
-  color: #999;
-}
-
-.text-field-item {
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background-color: #f8f9fa;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-}
-
-.field-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid #e0e0e0;
-}
-
-.field-header strong {
-  color: #333;
-  font-size: 1rem;
-}
-
-.remove-field-btn {
-  background-color: #dc3545;
-  color: white;
-  padding: 0.4rem 0.8rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition: background-color 0.2s;
-}
-
-.remove-field-btn:hover {
-  background-color: #c82333;
-}
-
-.text-field-item label {
-  margin-bottom: 0.75rem;
-}
-
-/* Text Field Controls - Single Row Layout */
-.text-field-controls {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  margin-top: 0.5rem;
-}
-
-.control-item {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 0;
-}
-
-.control-item input,
-.control-item select {
-  width: 100%;
-}
-
-/* Flexible width items (Esquerda, Topo, Tamanho) */
-.control-flex {
-  flex: 1;
-  min-width: 0;
-}
-
-/* Fixed width for font family */
-.control-font {
-  width: 200px;
-  flex-shrink: 0;
-}
-
-/* Fixed width for color */
-.control-color {
-  width: 60px;
-  flex-shrink: 0;
-}
-
-.control-color input[type="color"] {
-  height: 42px;
-  padding: 0.25rem;
-}
-
-/* Format buttons container */
-.control-format {
-  flex-shrink: 0;
-}
-
-.control-format .format-buttons {
-  margin-top: 0.25rem;
-}
-
-/* Formatting Buttons */
-.formatting-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 1rem;
-  padding: 0.75rem;
-  background-color: white;
-  border-radius: 4px;
-  border: 1px solid #ddd;
-}
-
-.format-label {
-  margin: 0;
-  font-weight: 600;
-  color: #555;
-}
-
-.format-buttons {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.format-btn {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: white;
-  border: 2px solid #ccc;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1.1rem;
-  font-weight: 600;
-  transition: all 0.2s;
-  color: #555;
-}
-
-.format-btn:hover:not(:disabled) {
-  border-color: #999;
-  background-color: #f5f5f5;
-}
-
-.format-btn.active {
-  background-color: #0066cc;
-  border-color: #0066cc;
-  color: white;
-}
-
-.format-btn:active:not(:disabled) {
-  transform: scale(0.95);
-}
-
-.format-btn:disabled,
-.format-btn.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  background-color: #f5f5f5;
-  border-color: #ddd;
-}
-
-.format-btn strong,
-.format-btn em,
-.format-btn span {
-  pointer-events: none;
-}
-
-/* Custom Fonts Section */
-.upload-font {
-  margin-bottom: 1rem;
-}
-
-.upload-font-btn {
-  display: inline-block;
-  padding: 0.75rem 1.5rem;
-  background-color: #6c757d;
-  color: white;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-
-.upload-font-btn:hover {
-  background-color: #5a6268;
-}
-
-.upload-font-btn input[type="file"] {
-  display: none;
-}
-
-.font-loading {
-  padding: 0.75rem;
-  background-color: #fff3cd;
-  border-left: 4px solid #ffc107;
-  border-radius: 4px;
-  color: #856404;
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.font-error {
-  padding: 0.75rem;
-  background-color: #f8d7da;
-  border-left: 4px solid #dc3545;
-  border-radius: 4px;
-  color: #721c24;
-  margin-bottom: 1rem;
-}
-
-.custom-fonts-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.custom-font-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem;
-  background-color: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.custom-font-item:hover {
-  background-color: #f8f9fa;
-}
-
-.custom-font-item span {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 500;
-  color: #333;
-}
-
-.custom-font-item button {
-  padding: 0.4rem 0.8rem;
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  transition: background-color 0.2s;
-}
-
-.custom-font-item button:hover {
-  background-color: #c82333;
-}
-
-.no-fonts {
-  padding: 1.5rem;
-  text-align: center;
-  background-color: #f8f9fa;
-  border: 2px dashed #ddd;
-  border-radius: 4px;
-  color: #999;
-  font-style: italic;
-}
-
-.data-source-separator {
-  display: flex;
-  align-items: center;
-  text-align: center;
-  color: #999;
-  margin: 1rem 0;
-}
-.data-source-separator::before,
-.data-source-separator::after {
-  content: '';
-  flex: 1;
-  border-bottom: 1px solid #ddd;
-}
-.data-source-separator:not(:empty)::before {
-  margin-right: .25em;
-}
-.data-source-separator:not(:empty)::after {
-  margin-left: .25em;
-}
-.csv-info {
-  margin-top: 0.5rem;
-  display: block;
-  color: #0066cc;
-}
-
-.export-option-label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-weight: 500;
-  color: #555;
-  flex: 1;
-  min-width: 200px;
-}
-
-/* Tab Navigation Styles */
-.tab-navigation {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-  border-bottom: 2px solid #e0e0e0;
-}
-
-.tab-button {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
-  color: #666;
-  font-weight: 500;
-  font-size: 0.95rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-  bottom: -2px;
-}
-
-.tab-button:hover {
-  background: #f5f5f5;
-  color: #333;
-}
-
-.tab-button.active {
-  color: #0066cc;
-  border-bottom-color: #0066cc;
-  background: #f0f8ff;
-  font-weight: 600;
-}
-
-.tab-content {
-  animation: fadeIn 0.3s ease-in;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Enhanced CSV Info */
-.csv-info {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-  display: block;
-  color: #0066cc;
-  background-color: #e7f3ff;
-  border-left: 4px solid #0066cc;
-  border-radius: 4px;
-  font-size: 0.9rem;
-}
-
-/* Template file styling for batch tab */
-.tab-content .template-control {
-  margin-top: 0;
-}
-
-.tab-content .template-file input[type="file"] {
-  cursor: pointer;
-}
-
-.tab-content .template-file input[type="file"]::-webkit-file-upload-button {
-  background-color: #0066cc;
-  color: white;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-
-.tab-content .template-file input[type="file"]::-webkit-file-upload-button:hover {
-  background-color: #0052a3;
-}
-
-/* Manual tab textarea styling */
-.tab-content textarea {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.9rem;
-  line-height: 1.5;
-}
-
-/* QR Code Settings - Basic and Advanced */
-.qr-basic-settings {
-  margin-bottom: 0.5rem;
-}
-
-.advanced-toggle {
-  margin: 0.75rem 0 0.5rem 0;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.advanced-toggle::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(to right, #ddd, transparent);
-}
-
-.advanced-toggle-btn {
-  background: none;
-  border: none;
-  padding: 0.25rem 0;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: #6c757d;
-  text-align: left;
-  transition: color 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  white-space: nowrap;
-}
-
-.advanced-toggle-btn:hover {
-  color: #495057;
-}
-
-.advanced-toggle-btn:active {
-  color: #0066cc;
-}
-
-.qr-advanced-settings {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-  background-color: #f8f9fa;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  animation: expandDown 0.3s ease-out;
-}
-
-@keyframes expandDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Responsive adjustments for QR controls */
-@media (max-width: 768px) {
-  .qr-controls-row {
-    flex-wrap: wrap;
-  }
-  
-  .qr-control {
-    min-width: calc(50% - 0.375rem);
-  }
-  
-  .qr-text-controls-row {
-    flex-wrap: wrap;
-  }
-  
-  .qr-text-control {
-    min-width: calc(50% - 0.375rem);
-  }
-}
-</style>
