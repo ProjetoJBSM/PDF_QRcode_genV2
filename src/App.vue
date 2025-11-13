@@ -165,22 +165,25 @@
                 <label class="qr-control qr-size">
                   Tamanho do QR (pt)
                   <div style="display:flex; gap:0.5rem; align-items:center;">
-                    <input v-model.number="qrSize" type="range" min="30" max="1000" step="1" @input="onSliderChange" @change="generatePreview" />
-                    <span class="small">{{ qrSize }} pt</span>
+                    <input v-model.number="qrSize" type="range" min="30" :max="maxQrSize" step="1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                    <input v-model.number="qrSize" type="number" min="30" :max="maxQrSize" step="1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                    <span class="small" style="width: 30px;">pt</span>
                   </div>
                 </label>
                 <label class="qr-control qr-position">
                   Posição X - Esquerda (pt)
                   <div style="display:flex; gap:0.5rem; align-items:center;">
-                    <input v-model.number="posX" type="range" min="0" max="2000" step="1" @input="onSliderChange" @change="generatePreview" />
-                    <span class="small">{{ posX }} pt</span>
+                    <input v-model.number="posX" type="range" min="0" :max="maxPosX" step="1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                    <input v-model.number="posX" type="number" min="0" :max="maxPosX" step="1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                    <span class="small" style="width: 30px;">pt</span>
                   </div>
                 </label>
                 <label class="qr-control qr-position">
                   Posição Y - Topo (pt)
                   <div style="display:flex; gap:0.5rem; align-items:center;">
-                    <input v-model.number="posY" type="range" min="0" max="2000" step="1" @input="onSliderChange" @change="generatePreview" />
-                    <span class="small">{{ posY }} pt</span>
+                    <input v-model.number="posY" type="range" min="0" :max="maxPosY" step="1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                    <input v-model.number="posY" type="number" min="0" :max="maxPosY" step="1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                    <span class="small" style="width: 30px;">pt</span>
                   </div>
                 </label>
             <label class="qr-text-control qr-color">
@@ -253,11 +256,11 @@
             <input v-model="field.text" :disabled="field.useColumn" type="text" placeholder="Digite o texto aqui..." />
           </label>
 
-          <div style="margin-top:0.5rem; display:flex; gap:0.5rem; align-items:center;">
-            <label style="display:flex; align-items:center; gap:0.35rem;">
-              <input type="checkbox" v-model="field.useColumn" /> Usar coluna CSV
+          <div v-if="activeTab === 'batch' && csvData.length > 0" style="margin-top:0.5rem; display:flex; gap:0.5rem; align-items:center;">
+            <label style="display:flex; align-items:center; gap:0.35rem; min-width:150px; flex-shrink:0; margin: 8px 0 8px 0;">
+              <input type="checkbox" v-model="field.useColumn" style="width: 20%;"/> Usar coluna CSV
             </label>
-            <select v-if="field.useColumn" v-model="field.bindColumn" style="padding:4px 8px;">
+            <select v-if="field.useColumn" v-model="field.bindColumn" style="padding:4px 8px; margin-top: none;">
               <option :value="null">-- selecione coluna --</option>
               <option v-for="col in csvPreviewColumns" :key="col" :value="col">{{ col }}</option>
             </select>
@@ -268,15 +271,17 @@
             <label class="control-item control-flex">
               Esquerda (pt)
               <div style="display:flex; gap:0.5rem; align-items:center;">
-                <input v-model.number="field.x" type="range" min="0" max="2000" step="1" @input="onSliderChange" @change="generatePreview" />
-                <span class="small">{{ field.x || 0 }}</span>
+                <input v-model.number="field.x" type="range" min="0" :max="maxTextPosX" step="1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                <input v-model.number="field.x" type="number" min="0" :max="maxTextPosX" step="1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                <span class="small" style="width: 20px;">pt</span>
               </div>
             </label>
             <label class="control-item control-flex">
               Topo (pt)
-              <div style="display:flex; gap:0.5rem; align-items:center;">
-                <input v-model.number="field.y" type="range" min="0" max="2000" step="1" @input="onSliderChange" @change="generatePreview" />
-                <span class="small">{{ field.y || 0 }}</span>
+              <div style="display:flex; gap:0.5rem; align-items:center; padding: none;">
+                <input v-model.number="field.y" type="range" min="0" :max="maxTextPosY" step="1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                <input v-model.number="field.y" type="number" min="0" :max="maxTextPosY" step="1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                <span class="small" style="width: 20px;">pt</span>
               </div>
             </label>
             <label class="control-item control-font">
@@ -292,7 +297,7 @@
                 </optgroup>
               </select>
             </label>
-            <label class="control-item control-flex">
+            <label class="control-item control-font-size">
               Tamanho (pt)
               <div style="display:flex; gap:0.5rem; align-items:center;">
                 <input v-model.number="field.size" type="number" min="6" step="1" @change="generatePreview" />
@@ -308,6 +313,66 @@
                 <button type="button" class="format-btn" :class="{ active: field.bold }" @click="field.bold = !field.bold" title="Negrito"><strong>B</strong></button>
                 <button type="button" class="format-btn" :class="{ active: field.italic }" @click="field.italic = !field.italic" title="Itálico"><em>I</em></button>
                 <button type="button" class="format-btn" :class="{ active: field.underline }" @click="field.underline = !field.underline" title="Sublinhado"><span style="text-decoration: underline;">U</span></button>
+              </div>
+            </label>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Campos de Imagem</legend>
+        <div class="text-fields-header">
+          <p class="small">Adicione imagens personalizadas ao PDF</p>
+          <button type="button" class="add-field-btn" @click="addImageField">
+            + Adicionar Campo de Imagem
+          </button>
+        </div>
+
+        <div v-if="imageFields.length === 0" class="no-fields">
+          <p class="small">Nenhum campo de imagem adicionado ainda.</p>
+        </div>
+
+        <div v-for="(field, index) in imageFields" :key="field.id" class="text-field-item">
+          <div class="field-header">
+            <strong>Imagem {{ index + 1 }}</strong>
+            <button type="button" class="remove-field-btn" @click="removeImageField(index)">Remover</button>
+          </div>
+
+          <label class="template-control template-file">
+            Carregar imagem (PNG, JPG)
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/jpg"
+              @change="(e) => handleImageUpload(e, index)"
+            />
+            <span v-if="field.fileName" class="small" style="margin-top: 0.25rem; display: block;">
+              Arquivo: <strong>{{ field.fileName }}</strong> | Dimensões: {{ field.originalWidth }}×{{ field.originalHeight }}px
+            </span>
+          </label>
+
+          <div class="text-field-controls">
+            <label class="control-item control-flex">
+              Esquerda (pt)
+              <div style="display:flex; gap:0.5rem; align-items:center;">
+                <input v-model.number="field.x" type="range" min="0" :max="maxTextPosX" step="1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                <input v-model.number="field.x" type="number" min="0" :max="maxTextPosX" step="1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                <span class="small" style="width: 20px;">pt</span>
+              </div>
+            </label>
+            <label class="control-item control-flex">
+              Topo (pt)
+              <div style="display:flex; gap:0.5rem; align-items:center;">
+                <input v-model.number="field.y" type="range" min="0" :max="maxTextPosY" step="1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                <input v-model.number="field.y" type="number" min="0" :max="maxTextPosY" step="1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                <span class="small" style="width: 20px;">pt</span>
+              </div>
+            </label>
+            <label class="control-item control-flex">
+              Escala (%)
+              <div style="display:flex; gap:0.5rem; align-items:center;">
+                <input v-model.number="field.scale" type="range" min="1" max="400" step="0.1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                <input v-model.number="field.scale" type="number" min="1" max="400" step="0.1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                <span class="small" style="width: 20px;">%</span>
               </div>
             </label>
           </div>
@@ -540,6 +605,10 @@ const textFields = ref([])
 let textFieldIdCounter = 0
 const exportOption = ref('single_pdf') //para o batch
 
+// Image fields state
+const imageFields = ref([])
+let imageFieldIdCounter = 0
+
 // Custom fonts state
 const customFonts = ref([])
 const fontLoading = ref(false)
@@ -700,6 +769,68 @@ const removeTextField = (index) => {
   textFields.value.splice(index, 1)
 }
 
+// Add image field
+const addImageField = () => {
+  imageFields.value.push({
+    id: imageFieldIdCounter++,
+    fileName: '',
+    imageData: null,
+    imageBytes: null,
+    x: 100,
+    y: 100,
+    scale: 100,
+    originalWidth: 100,
+    originalHeight: 100
+  })
+}
+
+// Remove image field
+const removeImageField = (index) => {
+  imageFields.value.splice(index, 1)
+}
+
+// Handle image upload for a specific field
+const handleImageUpload = async (event, index) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  try {
+    const field = imageFields.value[index]
+    field.fileName = file.name
+    
+    // Read as ArrayBuffer for PDF embedding
+    const arrayBuffer = await file.arrayBuffer()
+    field.imageBytes = new Uint8Array(arrayBuffer)
+    
+    // Also create a data URL for preview and get dimensions
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      field.imageData = e.target.result
+      
+      // Create temporary image to get original dimensions
+      const img = new Image()
+      img.onload = () => {
+        field.originalWidth = img.naturalWidth
+        field.originalHeight = img.naturalHeight
+        // Default scale to fit within 200pt
+        const maxSize = 200
+        const maxDim = Math.max(img.naturalWidth, img.naturalHeight)
+        if (maxDim > maxSize) {
+          field.scale = (maxSize / maxDim) * 100
+        } else {
+          field.scale = 100
+        }
+        generatePreview()
+      }
+      img.src = e.target.result
+    }
+    reader.readAsDataURL(file)
+  } catch (err) {
+    console.error('Erro ao carregar imagem:', err)
+    status.value = 'Erro ao carregar imagem: ' + err.message
+  }
+}
+
 // Create text fields automatically from CSV columns
 const createFieldsFromColumns = () => {
   const cols = csvPreviewColumns.value
@@ -819,6 +950,16 @@ const exportConfiguration = () => {
         bindColumn: field.bindColumn || null,
         useColumn: field.useColumn || false
       })),
+      imageFields: imageFields.value.map(field => ({
+        fileName: field.fileName,
+        imageData: field.imageData,
+        imageBytes: field.imageBytes ? btoa(String.fromCharCode.apply(null, Array.from(field.imageBytes))) : null,
+        x: field.x,
+        y: field.y,
+        scale: field.scale,
+        originalWidth: field.originalWidth,
+        originalHeight: field.originalHeight
+      })),
       customFonts: customFonts.value.map(font => ({
         name: font.name,
         // Convert Uint8Array to base64 for JSON serialization
@@ -902,6 +1043,40 @@ const importConfiguration = async (event) => {
         bindColumn: field.bindColumn || null,
         useColumn: field.useColumn || false
       }))
+    }
+
+    // Restore image fields
+    if (config.imageFields && Array.isArray(config.imageFields)) {
+      imageFields.value = []
+      for (const field of config.imageFields) {
+        try {
+          const imageField = {
+            id: imageFieldIdCounter++,
+            fileName: field.fileName || '',
+            imageData: field.imageData || null,
+            imageBytes: null,
+            x: field.x || 100,
+            y: field.y || 100,
+            scale: field.scale || 100,
+            originalWidth: field.originalWidth || 100,
+            originalHeight: field.originalHeight || 100
+          }
+          
+          // Convert base64 back to Uint8Array if available
+          if (field.imageBytes) {
+            const binaryString = atob(field.imageBytes)
+            const bytes = new Uint8Array(binaryString.length)
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i)
+            }
+            imageField.imageBytes = bytes
+          }
+          
+          imageFields.value.push(imageField)
+        } catch (imgErr) {
+          console.error(`Erro ao carregar imagem ${field.fileName}:`, imgErr)
+        }
+      }
     }
 
     // Restore custom fonts
@@ -1085,6 +1260,103 @@ const getPageDimensions = () => {
   return { width: baseW, height: baseH }
 }
 
+// Computed: maximum QR size to fit within page (based on smallest dimension)
+const maxQrSize = computed(() => {
+  const dims = getPageDimensions()
+  // Limit to the smaller dimension to ensure QR always fits
+  const max = Math.min(dims.width, dims.height)
+  return Math.max(30, max) // minimum 30pt
+})
+
+// Computed: maximum X position to keep QR code within page bounds
+const maxPosX = computed(() => {
+  const dims = getPageDimensions()
+  const max = Math.max(0, dims.width - qrSize.value)
+  return max
+})
+
+// Computed: maximum Y position to keep QR code within page bounds
+const maxPosY = computed(() => {
+  const dims = getPageDimensions()
+  const max = Math.max(0, dims.height - qrSize.value)
+  return max
+})
+
+// Computed: maximum X position for text fields (page width)
+const maxTextPosX = computed(() => {
+  const dims = getPageDimensions()
+  return dims.width
+})
+
+// Computed: maximum Y position for text fields (page height)
+const maxTextPosY = computed(() => {
+  const dims = getPageDimensions()
+  return dims.height
+})
+
+// Watch qrSize and adjust positions if they exceed new bounds
+watch(qrSize, (newSize, oldSize) => {
+  // Only adjust if size increased and positions are now out of bounds
+  if (newSize > oldSize) {
+    const dims = getPageDimensions()
+    
+    // Clamp posX to new maximum
+    const newMaxX = Math.max(0, dims.width - newSize)
+    if (posX.value > newMaxX) {
+      posX.value = newMaxX
+    }
+    
+    // Clamp posY to new maximum
+    const newMaxY = Math.max(0, dims.height - newSize)
+    if (posY.value > newMaxY) {
+      posY.value = newMaxY
+    }
+  }
+})
+
+// Watch page dimensions and adjust QR size and positions if they exceed bounds
+watch([pageSize, pageRotation, customW, customH], () => {
+  const dims = getPageDimensions()
+  
+  // Clamp QR size to new maximum (smallest dimension)
+  const newMaxSize = Math.min(dims.width, dims.height)
+  if (qrSize.value > newMaxSize) {
+    qrSize.value = Math.max(30, newMaxSize)
+  }
+  
+  // Clamp posX to maximum
+  const newMaxX = Math.max(0, dims.width - qrSize.value)
+  if (posX.value > newMaxX) {
+    posX.value = newMaxX
+  }
+  
+  // Clamp posY to maximum
+  const newMaxY = Math.max(0, dims.height - qrSize.value)
+  if (posY.value > newMaxY) {
+    posY.value = newMaxY
+  }
+  
+  // Clamp text field positions to page bounds
+  textFields.value.forEach(field => {
+    if (field.x > dims.width) {
+      field.x = dims.width
+    }
+    if (field.y > dims.height) {
+      field.y = dims.height
+    }
+  })
+  
+  // Clamp image field positions to page bounds
+  imageFields.value.forEach(field => {
+    if (field.x > dims.width) {
+      field.x = dims.width
+    }
+    if (field.y > dims.height) {
+      field.y = dims.height
+    }
+  })
+})
+
 // (Removed page-based clamping — user requested unconstrained controls so values are fully editable)
 
 // Utility: generate a recolored PNG data URL from the QR library canvas
@@ -1250,6 +1522,26 @@ const renderLivePreview = async () => {
     console.warn('Erro ao gerar QR preview:', err)
   }
 
+  // Add image fields
+  for (const field of imageFields.value) {
+    if (field.imageData) {
+      const img = document.createElement('img')
+      img.src = field.imageData
+      img.style.position = 'absolute'
+      img.style.left = (field.x || 0) + 'px'
+      img.style.top = (field.y || 0) + 'px'
+      // Calculate dimensions based on scale (convert percentage to decimal)
+      const scaleDecimal = (field.scale || 100) / 100
+      const width = (field.originalWidth || 100) * scaleDecimal
+      const height = (field.originalHeight || 100) * scaleDecimal
+      img.style.width = width + 'px'
+      img.style.height = height + 'px'
+      img.style.pointerEvents = 'none'
+      img.style.objectFit = 'contain'
+      pageWrap.appendChild(img)
+    }
+  }
+
   // Add text fields
   for (const field of textFields.value) {
     const div = document.createElement('div')
@@ -1261,6 +1553,23 @@ const renderLivePreview = async () => {
     div.style.color = field.color || '#000'
     div.style.whiteSpace = 'pre-wrap'
     div.style.pointerEvents = 'none'
+    
+    // Apply text formatting
+    if (field.bold) {
+      div.style.fontWeight = 'bold'
+    }
+    if (field.italic) {
+      div.style.fontStyle = 'italic'
+    }
+    if (field.underline) {
+      div.style.textDecoration = 'underline'
+    }
+    
+    // Apply font family
+    if (field.fontFamily) {
+      div.style.fontFamily = field.fontFamily
+    }
+    
     pageWrap.appendChild(div)
   }
 }
@@ -1292,6 +1601,8 @@ watchEffect(() => {
     state.value.templateBytes,
     	textFields.value.length,
     	...textFields.value.flatMap(f => [f.text, f.x, f.y, f.size, f.fontFamily, f.bold, f.italic, f.underline, f.color, f.useColumn, f.bindColumn]),
+    	imageFields.value.length,
+    	...imageFields.value.flatMap(f => [f.imageData, f.x, f.y, f.scale]),
     customFonts.value.length,
     ...customFonts.value.map(f => f.name)
   ]
@@ -1396,6 +1707,7 @@ const generatePreview = async () => {
       
       page.drawPage(embedded, drawOptions)
       await drawQrOnPage(pdfDoc, page, urlList[0], font)
+      await drawImageFields(pdfDoc, page)
       await drawTextFields(pdfDoc, page, sampleRow)
     } else {
       // Use helper function for page dimensions
@@ -1437,6 +1749,7 @@ const generatePreview = async () => {
         })
       }
       await drawQrOnPage(pdfDoc, page, urlList[0], font)
+      await drawImageFields(pdfDoc, page)
       await drawTextFields(pdfDoc, page, sampleRow)
     }
 
@@ -1529,6 +1842,7 @@ const generateSinglePDF = async (urlList) => {
         const page = pdfDoc.addPage([pageW, pageH])
         page.drawPage(embedded, drawOptions)
         await drawQrOnPage(pdfDoc, page, u, font)
+        await drawImageFields(pdfDoc, page)
         await drawTextFields(pdfDoc, page, typeof item === 'object' ? item : null)
       }
     } else {
@@ -1551,6 +1865,7 @@ const generateSinglePDF = async (urlList) => {
           page.drawImage(png, { x: (pageW - dims.width) / 2, y: (pageH - dims.height) / 2, width: dims.width, height: dims.height })
         }
         await drawQrOnPage(pdfDoc, page, u, font)
+        await drawImageFields(pdfDoc, page)
         await drawTextFields(pdfDoc, page, typeof item === 'object' ? item : null)
       }
     }
@@ -1605,7 +1920,7 @@ const generateZipWithMultiplePDFs = async (dataList) => {
           else if (pageRotation.value === 270) { drawOptions.y = pageH }
         }
         page.drawPage(embedded, drawOptions)
-    await drawQrOnPage(pdfDoc, page, u, font); await drawTextFields(pdfDoc, page, item)
+    await drawQrOnPage(pdfDoc, page, u, font); await drawImageFields(pdfDoc, page); await drawTextFields(pdfDoc, page, item)
       } else {
         const dims = getPageDimensions(); pageW = dims.width; pageH = dims.height
         const page = pdfDoc.addPage([pageW, pageH])
@@ -1619,7 +1934,7 @@ const generateZipWithMultiplePDFs = async (dataList) => {
           const r = parseInt(hex.substring(0, 2), 16) / 255, g = parseInt(hex.substring(2, 4), 16) / 255, b = parseInt(hex.substring(4, 6), 16) / 255
           page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: rgb(r, g, b) })
         }
-  await drawQrOnPage(pdfDoc, page, u, font); await drawTextFields(pdfDoc, page, item)
+  await drawQrOnPage(pdfDoc, page, u, font); await drawImageFields(pdfDoc, page); await drawTextFields(pdfDoc, page, item)
       }
 
       const pdfBytes = await pdfDoc.save()
@@ -1651,6 +1966,49 @@ const generateZipWithMultiplePDFs = async (dataList) => {
 
 // Draw text fields on page
 // Accepts an optional dataRow (object) to fill fields bound to CSV columns
+const drawImageFields = async (pdfDoc, page) => {
+  for (const field of imageFields.value) {
+    if (!field.imageBytes) continue // Skip if no image loaded
+
+    try {
+      let embeddedImage
+      const fileName = (field.fileName || '').toLowerCase()
+      
+      // Determine image type and embed
+      if (fileName.endsWith('.png')) {
+        embeddedImage = await pdfDoc.embedPng(field.imageBytes)
+      } else if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')) {
+        embeddedImage = await pdfDoc.embedJpg(field.imageBytes)
+      } else {
+        // Try PNG as default
+        try {
+          embeddedImage = await pdfDoc.embedPng(field.imageBytes)
+        } catch {
+          embeddedImage = await pdfDoc.embedJpg(field.imageBytes)
+        }
+      }
+
+      // Calculate dimensions based on scale (convert percentage to decimal)
+      const scaleDecimal = (field.scale || 100) / 100
+      const width = (field.originalWidth || 100) * scaleDecimal
+      const height = (field.originalHeight || 100) * scaleDecimal
+      
+      // Calculate Y position (PDF coordinates start from bottom)
+      const yPos = page.getHeight() - field.y - height
+
+      // Draw image
+      page.drawImage(embeddedImage, {
+        x: field.x,
+        y: yPos,
+        width: width,
+        height: height,
+      })
+    } catch (err) {
+      console.error('Erro ao desenhar imagem no PDF:', err)
+    }
+  }
+}
+
 const drawTextFields = async (pdfDoc, page, dataRow = null) => {
   for (const field of textFields.value) {
     // Determine the text to render: priority
