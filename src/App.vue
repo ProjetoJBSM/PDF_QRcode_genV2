@@ -5,86 +5,127 @@
       <p class="hint">
         Cole URLs (uma por linha), escolha um template (imagem ou PDF opcional), defina a posição/tamanho do QR e gere um PDF com uma página por URL — tudo no navegador.
       </p>
-    </header> 
+    </header>
 
   <div class="main-layout" :class="{ 'loader-view': view === 'loader' }">
   <form @submit.prevent class="form-section" :class="{ 'form-section--fullscreen': view === 'loader' }">
       <fieldset v-if="view === 'loader'">
         <legend>Dados</legend>
-        <label>
-          URL
-          <textarea
-            v-model="urls"
-            placeholder="https://example.com/one"
-            :disabled="csvData.length>0"
-          ></textarea>
-        </label> 
-
-        <div class="data-source-separator">
-          <span>OU</span>
+        
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+          <button 
+            type="button" 
+            class="tab-button" 
+            :class="{ active: activeTab === 'manual' }"
+            @click="activeTab = 'manual'"
+          >
+            Geração Manual
+          </button>
+          <button 
+            type="button" 
+            class="tab-button" 
+            :class="{ active: activeTab === 'batch' }"
+            @click="activeTab = 'batch'"
+          >
+            Geração em Batch
+          </button>
         </div>
 
-            <!-- Batch Generation Tab -->
-            <div v-show="activeTab === 'batch'" class="tab-content">
-              <label class="template-control template-file">
-                Carregar arquivo CSV
-                <input
-                  ref="csvFileInput"
-                  type="file"
-                  accept=".csv"
-                  @change="handleCsvUpload"
-                />
-                <span v-if="csvFileName" class="csv-info small">
-                  Arquivo carregado: <strong>{{ csvFileName }}</strong> ({{ csvData.length }} linhas)
-                </span>
-              </label>
+        <!-- Manual Generation Tab -->
+        <div v-show="activeTab === 'manual'" class="tab-content">
+          <label>
+            Conteúdo do QR Code
+            <textarea
+              v-model="manualInput"
+              placeholder="Digite a URL ou texto para o QR Code&#10;Exemplo: https://example.com"
+              rows="3"
+            ></textarea>
+          </label>
+          <p class="small" style="margin-top: 0.5rem; color: #666;">
+            Insira uma URL ou texto para gerar um único QR Code. Será gerado um PDF de uma página.
+          </p>
+        </div>
 
-              <div v-if="csvData.length > 0" class="csv-column-select" style="margin-top: 1rem;">
-                <label for="qrColumnSelect" style="font-weight: 600;">
-                  1. Selecione a coluna para o QR Code:
-                </label>
-                <select id="qrColumnSelect" v-model="qrDataColumn" style="width: 100%; margin-top: 0.25rem;">
-                  <option :value="null" disabled>-- Escolha a coluna com as URLs/textos --</option>
-                  <option v-for="col in csvPreviewColumns" :key="col" :value="col">
-                    {{ col }}
-                  </option>
-                </select>
-                <p v-if="!qrDataColumn" class="small" style="color: #dc3545; margin-top: 0.25rem;">
-                  ⚠️ É necessário selecionar uma coluna para continuar.
-                </p>
-              </div>
-
-              <!-- Range selection for batch rows -->
-              <div v-if="csvData.length > 0" class="range-selection" style="margin-top:1rem;">
-                <label style="font-weight:600; display:block;">Linhas para gerar (ex.: 1-10,14,18-22)</label>
-                <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
-                  <input type="text" v-model="rangeSpec" placeholder="1-10,14,18-22" style="flex:1; min-width:0; padding:8px;" />
-                  <button type="button" class="secondary" @click="setRangeAll">Todas</button>
-                </div>
-                <p class="small" style="margin-top:0.25rem; color:#666;">Use sintaxe de intervalo (impressão): <code>1-10,14,18-22</code>. Valores baseados em 1 (primeira linha = 1). Use <code>all</code> ou deixe vazio para todas.</p>
-                <p v-if="rangeError" class="small" style="color:#dc3545; margin-top:0.25rem;">{{ rangeError }}</p>
-              </div>
-
-              <p class="small" style="margin-top: 0.5rem; color: #666;">
-                Para gerar ZIP com nomes personalizados, adicione também a coluna <strong>"nome_arquivo"</strong>.
-              </p>
-              
-              <label class="export-option-label" style="margin-top: 1rem;">
-                Formato de Saída
-                <select v-model="exportOption">
-                  <option value="single_pdf">PDF Único com várias páginas</option>
-                  <option value="multiple_pdfs_zip">ZIP com um PDF por página</option>
-                </select>
-              </label>
-            </div>
-
-            <div style="margin-top:1rem; display:flex; gap:0.5rem; align-items:center;">
-              <button type="button" class="primary" @click="goToEditor">Editar Template →</button>
-              <button type="button" class="secondary" @click="clearCsvData">Limpar CSV</button>
-            </div>
+        <!-- Batch Generation Tab -->
+        <div v-show="activeTab === 'batch'" class="tab-content">
+          <label class="template-control template-file">
+            Carregar arquivo CSV
+            <input
+              type="file"
+              accept=".csv"
+              @change="handleCsvUpload"
+            />
+            <span v-if="csvFileName" class="csv-info small">
+              Arquivo carregado: <strong>{{ csvFileName }}</strong> ({{ csvData.length }} URLs encontradas)
+            </span>
+          <div v-if="csvData.length > 0" class="csv-column-select" style="margin-top: 1rem;">
+            <label for="qrColumnSelect" style="font-weight: 600;">
+              1. Selecione a coluna para o QR Code:
+            </label>
+            <select id="qrColumnSelect" v-model="qrDataColumn" style="width: 100%; margin-top: 0.25rem;">
+              <option :value="null" disabled>-- Escolha a coluna com as URLs/textos --</option>
+              <option v-for="col in csvPreviewColumns" :key="col" :value="col">
+                {{ col }}
+              </option>
+            </select>
+            <p v-if="!qrDataColumn" class="small" style="color: #dc3545; margin-top: 0.25rem;">
+              ⚠️ É necessário selecionar uma coluna para continuar.
+            </p>
           </div>
+          </label>
+
+          <!-- tabela de visualização de CSV -->
+          <div v-if="csvData.length" class="csv-preview" style="margin-top:0.75rem;">
+            <div class="small" style="margin-bottom:0.25rem; display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+              <div>Preview do CSV — mostrando primeiras {{ csvPreviewRows.length }} linhas ({{ csvData.length }} no total)</div>
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <label class="small" style="display:flex; align-items:center; gap:0.35rem;">Mostrar
+                  <select v-model.number="previewCount" style="font-size:0.9rem; padding:2px 6px;">
+                    <option :value="5">5</option>
+                    <option :value="10">10</option>
+                    <option :value="25">25</option>
+                    <option :value="50">50</option>
+                    <option :value="100">100</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div class="csv-table-wrapper" style="overflow:auto; max-width:100%; border:1px solid #e3e3e3; border-radius:4px;">
+              <table style="border-collapse:collapse; width:100%; min-width:400px;">
+                <thead style="background:#fafafa;">
+                  <tr>
+                    <th v-for="col in csvPreviewColumns" :key="col" style="text-align:left; padding:6px 8px; border-bottom:1px solid #eee;">{{ col }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(r, idx) in csvPreviewRows" :key="idx">
+                    <td v-for="col in csvPreviewColumns" :key="col + '-' + idx" style="padding:6px 8px; border-bottom:1px solid #f5f5f5;">{{ r[col] }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-if="csvPreviewRemaining > 0" class="small" style="margin-top:0.4rem; color:#666;">... e mais {{ csvPreviewRemaining }} linhas</div>
+          </div>
+          <p class="small" style="margin-top: 0.5rem; color: #666;">
+            Para gerar ZIP com nomes personalizados, adicione também a coluna <strong>"nome_arquivo"</strong>.
+          </p>
+          
+          <label class="export-option-label" style="margin-top: 1rem;">
+            Formato de Saída
+            <select v-model="exportOption">
+              <option value="single_pdf">PDF Único com várias páginas</option>
+              <option value="multiple_pdfs_zip">ZIP com um PDF por página</option>
+            </select>
+          </label>
+        </div>
+        
+        <!-- Template controls and page-size moved to editor view -->
       </fieldset>
-      <!-- (button removed - moved inside loader left column to avoid duplication) -->
+      <!-- Loader actions: show button to proceed to editor when on loader view -->
+      <div v-if="view === 'loader'" class="loader-actions" style="margin: 1rem 0;">
+        <button type="button" class="primary" @click="goToEditor">Editar Template →</button>
+      </div>
 
       <div v-if="view === 'editor'">
         <div class="editor-topbar" style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem;">
@@ -135,7 +176,6 @@
             <input v-model="backgroundColor" type="color" />
           </label>
         </div>
-      </fieldset>
 
         <hr class="card-divider" />
 
@@ -176,7 +216,6 @@
           </p>
         </div>
       </fieldset>
-      
 
       <fieldset class="config-card spaced-section">
         <legend>Opções Avançadas</legend>
@@ -219,82 +258,80 @@
             </button>
           </div>
           <div v-show="showTextFields" style="padding-bottom: 1rem; border-bottom: 1px solid #eee;">
-            <div class="text-fields-header">
-              <p class="small">Adicione campos de texto personalizados ao PDF</p>
-              <button type="button" class="add-field-btn" @click="addTextField">
-                + Adicionar Campo de Texto
-              </button>
-            </div>
-            <div v-if="textFields.length === 0" class="no-fields">
-              <p class="small">Nenhum campo de texto adicionado ainda.</p>
-            </div>
-            <div v-for="(field, index) in textFields" :key="field.id" class="text-field-item">
-              <div class="field-header">
-                <strong>Campo {{ index + 1 }}</strong>
-                <button type="button" class="remove-field-btn" @click="removeTextField(index)">Remover</button>
+
+      <div class="text-fields-header">
+          <p class="small">Adicione campos de texto personalizados ao PDF</p>
+          <button type="button" class="add-field-btn" @click="addTextField">
+            + Adicionar Campo de Texto
+          </button>
+        </div>
+
+        <div v-if="textFields.length === 0" class="no-fields">
+          <p class="small">Nenhum campo de texto adicionado ainda.</p>
+        </div>
+
+        <div v-for="(field, index) in textFields" :key="field.id" class="text-field-item">
+          <div class="field-header">
+            <strong>Campo {{ index + 1 }}</strong>
+            <button type="button" class="remove-field-btn" @click="removeTextField(index)">Remover</button>
+          </div>
+
+          <label>
+            Texto
+            <input v-model="field.text" :disabled="field.useColumn" type="text" placeholder="Digite o texto aqui..." />
+          </label>
+
+          <div style="margin-top:0.5rem; display:flex; gap:0.5rem; align-items:center;">
+            <label style="display:flex; align-items:center; gap:0.35rem;">
+              <input type="checkbox" v-model="field.useColumn" /> Usar coluna CSV
+            </label>
+            <select v-if="field.useColumn" v-model="field.bindColumn" style="padding:4px 8px;">
+              <option :value="null">-- selecione coluna --</option>
+              <option v-for="col in csvPreviewColumns" :key="col" :value="col">{{ col }}</option>
+            </select>
+            <div class="small">Ex.: {{ csvData[0] && field.bindColumn ? csvData[0][field.bindColumn] : '-' }}</div>
+          </div>
+
+          <div class="text-field-controls">
+            <label class="control-item control-flex">
+              Esquerda (pt)
+              <input v-model.number="field.x" type="number" min="0" />
+            </label>
+            <label class="control-item control-flex">
+              Topo (pt)
+              <input v-model.number="field.y" type="number" min="0" />
+            </label>
+            <label class="control-item control-font">
+              Família da Fonte
+              <select v-model="field.fontFamily">
+                <optgroup label="Fontes Padrão">
+                  <option value="Helvetica">Helvetica</option>
+                  <option value="Times">Times Roman</option>
+                  <option value="Courier">Courier</option>
+                </optgroup>
+                <optgroup v-if="customFonts.length > 0" label="Fontes Carregadas">
+                  <option v-for="font in customFonts" :key="font.name" :value="font.name">{{ font.name }}</option>
+                </optgroup>
+              </select>
+            </label>
+            <label class="control-item control-flex">
+              Tamanho (pt)
+              <input v-model.number="field.size" type="number" min="6" max="200" />
+            </label>
+            <label class="control-item control-color">
+              Cor
+              <input v-model="field.color" type="color" />
+            </label>
+            <label class="control-item control-format">
+              Formatação
+              <div class="format-buttons">
+                <button type="button" class="format-btn" :class="{ active: field.bold }" @click="field.bold = !field.bold" title="Negrito"><strong>B</strong></button>
+                <button type="button" class="format-btn" :class="{ active: field.italic }" @click="field.italic = !field.italic" title="Itálico"><em>I</em></button>
+                <button type="button" class="format-btn" :class="{ active: field.underline }" @click="field.underline = !field.underline" title="Sublinhado"><span style="text-decoration: underline;">U</span></button>
               </div>
-              <label>
-                Texto
-                <input v-model="field.text" :disabled="field.useColumn" type="text" placeholder="Digite o texto aqui..." />
-              </label>
-              <div style="margin-top:0.5rem; display:flex; gap:0.5rem; align-items:center;">
-                <label style="display:flex; align-items:center; gap:0.35rem;">
-                  <input type="checkbox" v-model="field.useColumn" /> Usar coluna CSV
-                </label>
-                <select v-if="field.useColumn" v-model="field.bindColumn" style="padding:4px 8px;">
-                  <option :value="null">-- selecione coluna --</option>
-                  <option v-for="col in csvPreviewColumns" :key="col" :value="col">{{ col }}</option>
-                </select>
-                <div class="small">Ex.: {{ csvData[0] && field.bindColumn ? csvData[0][field.bindColumn] : '-' }}</div>
-              </div>
-              <div class="text-field-controls">
-                <label class="control-item control-flex">
-                  Esquerda (pt)
-                  <div style="display:flex; gap:0.5rem; align-items:center;">
-                    <input v-model.number="field.x" type="range" min="0" max="2000" step="1" @input="onSliderChange" @change="generatePreview" />
-                    <span class="small">{{ field.x || 0 }}</span>
-                  </div>
-                </label>
-                <label class="control-item control-flex">
-                  Topo (pt)
-                  <div style="display:flex; gap:0.5rem; align-items:center;">
-                    <input v-model.number="field.y" type="range" min="0" max="2000" step="1" @input="onSliderChange" @change="generatePreview" />
-                    <span class="small">{{ field.y || 0 }}</span>
-                  </div>
-                </label>
-                <label class="control-item control-font">
-                  Família da Fonte
-                  <select v-model="field.fontFamily">
-                    <optgroup label="Fontes Padrão">
-                      <option value="Helvetica">Helvetica</option>
-                      <option value="Times">Times Roman</option>
-                      <option value="Courier">Courier</option>
-                    </optgroup>
-                    <optgroup v-if="customFonts.length > 0" label="Fontes Carregadas">
-                      <option v-for="font in customFonts" :key="font.name" :value="font.name">{{ font.name }}</option>
-                    </optgroup>
-                  </select>
-                </label>
-                <label class="control-item control-flex">
-                  Tamanho (pt)
-                  <div style="display:flex; gap:0.5rem; align-items:center;">
-                    <input v-model.number="field.size" type="number" min="6" step="1" @change="generatePreview" />
-                  </div>
-                </label>
-                <label class="control-item control-color">
-                  Cor
-                  <input v-model="field.color" type="color" />
-                </label>
-                <label class="control-item control-format">
-                  Formatação
-                  <div class="format-buttons">
-                    <button type="button" class="format-btn" :class="{ active: field.bold }" @click="field.bold = !field.bold" title="Negrito"><strong>B</strong></button>
-                    <button type="button" class="format-btn" :class="{ active: field.italic }" @click="field.italic = !field.italic" title="Itálico"><em>I</em></button>
-                    <button type="button" class="format-btn" :class="{ active: field.underline }" @click="field.underline = !field.underline" title="Sublinhado"><span style="text-decoration: underline;">U</span></button>
-                  </div>
-                </label>
-              </div>
-            </div>
+            </label>
+          </div>
+        </div>
           </div>
         </fieldset>
 
@@ -309,53 +346,58 @@
             </button>
           </div>
           <div v-show="showCustomFonts">
-            <p class="small" style="margin-bottom: 1rem; color: #666;">
-              Carregue arquivos de fonte .ttf ou .otf. 
-              <strong>Nota:</strong> Cada arquivo contém apenas uma variante (regular, negrito, itálico). 
-              Os botões de formatação não funcionam com fontes customizadas.
-            </p>
-            <div class="upload-font">
-              <label class="upload-font-btn">
-                Carregar Arquivo .ttf/.otf
-                <input 
-                  type="file" 
-                  accept=".ttf,.otf" 
-                  @change="loadCustomFontFile"
-                  style="display: none;"
-                />
-              </label>
-            </div>
-            <div v-if="fontLoading" class="font-loading">
-              <span class="small">Carregando fonte...</span>
-            </div>
-            <div v-if="fontLoadError" class="font-error">
-              <span class="small">{{ fontLoadError }}</span>
-            </div>
-            <div v-if="customFonts.length > 0" class="custom-fonts-list">
-              <label class="small" style="font-weight: 600; margin-bottom: 0.5rem; display: block;">
-                Fontes Carregadas ({{ customFonts.length }}):
-              </label>
-              <div 
-                v-for="(font, index) in customFonts" 
-                :key="font.name" 
-                class="custom-font-item"
-              >
-                <span class="font-name">
-                  {{ font.name }}
-                </span>
-                <button 
-                  type="button" 
-                  class="remove-font-btn" 
-                  @click="removeCustomFont(index)"
-                  title="Remover fonte"
-                >
-                  x
-                </button>
-              </div>
-            </div>
-            <div v-else class="no-fonts">
-              <p class="small">Nenhuma fonte customizada carregada ainda.</p>
-            </div>
+        <p class="small" style="margin-bottom: 1rem; color: #666;">
+          Carregue arquivos de fonte .ttf ou .otf. 
+          <strong>Nota:</strong> Cada arquivo contém apenas uma variante (regular, negrito, itálico). 
+          Os botões de formatação não funcionam com fontes customizadas.
+        </p>
+
+        <div class="upload-font">
+          <label class="upload-font-btn">
+            Carregar Arquivo .ttf/.otf
+            <input 
+              type="file" 
+              accept=".ttf,.otf" 
+              @change="loadCustomFontFile"
+              style="display: none;"
+            />
+          </label>
+        </div>
+
+        <div v-if="fontLoading" class="font-loading">
+          <span class="small">Carregando fonte...</span>
+        </div>
+
+        <div v-if="fontLoadError" class="font-error">
+          <span class="small">{{ fontLoadError }}</span>
+        </div>
+
+        <div v-if="customFonts.length > 0" class="custom-fonts-list">
+          <label class="small" style="font-weight: 600; margin-bottom: 0.5rem; display: block;">
+            Fontes Carregadas ({{ customFonts.length }}):
+          </label>
+          <div 
+            v-for="(font, index) in customFonts" 
+            :key="font.name" 
+            class="custom-font-item"
+          >
+            <span class="font-name">
+              {{ font.name }}
+            </span>
+            <button 
+              type="button" 
+              class="remove-font-btn" 
+              @click="removeCustomFont(index)"
+              title="Remover fonte"
+            >
+              x
+            </button>
+          </div>
+        </div>
+
+        <div v-else class="no-fonts">
+          <p class="small">Nenhuma fonte customizada carregada ainda.</p>
+        </div>
           </div>
         </fieldset>
 
@@ -373,7 +415,6 @@
           >
             📥 Exportar Configurações
           </button>
-          
           <label class="btn btn-secondary import-btn">
             📤 Importar Configurações
             <input 
@@ -388,7 +429,6 @@
           <button class="btn btn-primary btn-full" type="button" @click="startGeneration">
             {{ getGenerateButtonText() }}
           </button>
-          
           <a
             v-if="downloadUrl"
             :href="downloadUrl"
@@ -401,8 +441,8 @@
       </div>
       </form>
 
-      <!-- Live Preview Section -->
-      <div class="preview-section">
+      <!-- Live Preview Section (only in editor view) -->
+      <div class="preview-section" v-if="view === 'editor'">
         <h2>Pré-visualização em Tempo Real</h2>
         <div class="preview-info">
           <span class="small">Primeira página • Atualiza automaticamente  •  Ctrl + rolagem do mouse para zoom na página</span>
@@ -427,7 +467,7 @@
 </template>
 
 <script setup>
-import { ref, watch, watchEffect } from 'vue'
+import { ref, watch, watchEffect, computed } from 'vue'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import Papa from 'papaparse'
@@ -443,9 +483,13 @@ const QR_CORRECT_LEVEL = { L: 1, M: 0, Q: 3, H: 2 }
 let previewTimeout = null
 
 // Data refs
-const urls = ref('')
+const activeTab = ref('manual') // 'manual' or 'batch'
+const manualInput = ref('') // Input for manual generation
+const urls = ref('') // Kept for backward compatibility with batch
 const csvData = ref([]) //teste de correcao
 const csvFileName = ref('')
+const previewCount = ref(50)
+const qrDataColumn = ref(null)
 const pageSize = ref('A4')
 const pageRotation = ref(0) // 0, 90, 180, 270
 const customW = ref(595)
@@ -498,22 +542,51 @@ const downloadUrl = ref('')
 const urlCount = ref(0)
 const status = ref('')
 const previewUrl = ref('')
-const livePreviewContainer = ref(null)
-const canShowLivePreview = computed(() => {
-  // show live preview when we have at least one data source (manual or csv)
-  return (
-    (activeTab.value === 'manual' && manualInput.value && manualInput.value.trim()) ||
-    (activeTab.value === 'batch' && csvData.value && csvData.value.length > 0)
-  )
-})
 
 // UI state
 const showAdvancedQR = ref(false)
-const showTextFields = ref(false)   // <-- ADICIONE ESTA LINHA
-const showCustomFonts = ref(false)  // <-- ADICIONE ESTA LINHA
+const showTextFields = ref(false)
+const showCustomFonts = ref(false)
 
 // Hidden QR holder
 const qrHolder = ref(null)
+
+// View state: 'loader' (CSV/manual) or 'editor' (template editor)
+const view = ref('loader')
+
+const canEnterEditor = () => {
+  // Require at least one URL via manual input, legacy textarea `urls`, or CSV data
+  return (
+    (manualInput.value && manualInput.value.trim().length > 0) ||
+    (urls.value && urls.value.trim().length > 0) ||
+    (csvData.value && csvData.value.length > 0)
+  )
+}
+
+const goToEditor = () => {/*
+  if (!canEnterEditor()) {
+    status.value = '⚠️ Carregue pelo menos uma URL (manual ou CSV) antes de editar o template.'
+    setTimeout(() => { status.value = '' }, 3000)
+    return
+  }*/
+  view.value = 'editor'
+}
+
+const backToLoader = () => {
+  view.value = 'loader'
+}
+
+// CSV preview helpers
+const csvPreviewColumns = computed(() => {
+  if (!csvData.value || csvData.value.length === 0) return []
+  return Object.keys(csvData.value[0])
+})
+
+const csvPreviewRows = computed(() => {
+  return csvData.value ? csvData.value.slice(0, previewCount.value) : []
+})
+
+const csvPreviewRemaining = computed(() => Math.max(0, (csvData.value ? csvData.value.length : 0) - csvPreviewRows.value.length))
 
 // Rotate page by 90 degrees
 const rotatePage = () => {
@@ -532,13 +605,37 @@ const addTextField = () => {
     bold: false,
     italic: false,
     underline: false,
-    color: '#000000'
+    color: '#000000',
+    useColumn: false,
+    bindColumn: null
   })
 }
 
 // Remove text field
 const removeTextField = (index) => {
   textFields.value.splice(index, 1)
+}
+
+// Create text fields automatically from CSV columns
+const createFieldsFromColumns = () => {
+  const cols = csvPreviewColumns.value
+  if (!cols || cols.length === 0) return
+  for (const col of cols) {
+    textFields.value.push({
+      id: textFieldIdCounter++,
+      text: '',
+      x: 40,
+      y: 40,
+      size: 12,
+      fontFamily: 'Helvetica',
+      bold: false,
+      italic: false,
+      underline: false,
+      color: '#000000',
+      bindColumn: col,
+      useColumn: true
+    })
+  }
 }
 
 // Load custom font from file upload
@@ -590,38 +687,211 @@ const removeCustomFont = (index) => {
   })
 }
 
+// Get generate button text based on active tab and export option
+const getGenerateButtonText = () => {
+  if (activeTab.value === 'manual') {
+    return 'Gerar QR Code'
+  } else {
+    return exportOption.value === 'single_pdf' 
+      ? 'Gerar PDF Completo' 
+      : 'Gerar Arquivo .ZIP'
+  }
+}
+// Export configuration to JSON file
+const exportConfiguration = () => {
+  try {
+    const config = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      pageSettings: {
+        pageSize: pageSize.value,
+        pageRotation: pageRotation.value,
+        customWidth: customW.value,
+        customHeight: customH.value,
+        backgroundColor: backgroundColor.value
+      },
+      qrSettings: {
+        qrSize: qrSize.value,
+        posX: posX.value,
+        posY: posY.value,
+        ecc: ecc.value,
+        margin: margin.value,
+        renderText: renderText.value,
+        fontSize: fontSize.value,
+        maxChars: maxChars.value,
+        qrColor: qrColor.value,
+        qrBackground: qrBackground.value
+      },
+      textFields: textFields.value.map(field => ({
+        text: field.text,
+        x: field.x,
+        y: field.y,
+        size: field.size,
+        fontFamily: field.fontFamily,
+        bold: field.bold,
+        italic: field.italic,
+        underline: field.underline,
+        color: field.color,
+        bindColumn: field.bindColumn || null,
+        useColumn: field.useColumn || false
+      })),
+      customFonts: customFonts.value.map(font => ({
+        name: font.name,
+        // Convert Uint8Array to base64 for JSON serialization
+        bytes: btoa(String.fromCharCode.apply(null, Array.from(font.bytes)))
+      })),
+      exportOption: exportOption.value
+    }
+
+    const json = JSON.stringify(config, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `qr-template-config-${Date.now()}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    
+    status.value = 'Configuração exportada com sucesso!'
+    setTimeout(() => {
+      status.value = ''
+    }, 3000)
+  } catch (err) {
+    console.error('Erro ao exportar configuração:', err)
+    status.value = 'Erro ao exportar configuração: ' + err.message
+  }
+}
+
+// Import configuration from JSON file
+const importConfiguration = async (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  try {
+    const text = await file.text()  
+    const config = JSON.parse(text)
+
+    // Validate version (for future compatibility)
+    if (!config.version) {
+      throw new Error('Arquivo de configuração inválido: versão não encontrada')
+    }
+
+    // Restore page settings
+    if (config.pageSettings) {
+      pageSize.value = config.pageSettings.pageSize || 'A4'
+      pageRotation.value = config.pageSettings.pageRotation || 0
+      customW.value = config.pageSettings.customWidth || 595
+      customH.value = config.pageSettings.customHeight || 842
+      backgroundColor.value = config.pageSettings.backgroundColor || '#FFFFFF'
+    }
+
+    // Restore QR settings
+    if (config.qrSettings) {
+      qrSize.value = config.qrSettings.qrSize || 180
+      posX.value = config.qrSettings.posX || 60
+      posY.value = config.qrSettings.posY || 120
+      ecc.value = config.qrSettings.ecc || 'M'
+      margin.value = config.qrSettings.margin || 4
+      renderText.value = config.qrSettings.renderText || 'no'
+      fontSize.value = config.qrSettings.fontSize || 12
+      maxChars.value = config.qrSettings.maxChars || 64
+      qrColor.value = config.qrSettings.qrColor || '#000000'
+      qrBackground.value = config.qrSettings.qrBackground !== undefined ? config.qrSettings.qrBackground : true
+    }
+
+    // Restore text fields
+    if (config.textFields && Array.isArray(config.textFields)) {
+      textFields.value = config.textFields.map(field => ({
+        id: textFieldIdCounter++,
+        text: field.text || '',
+        x: field.x || 100,
+        y: field.y || 200,
+        size: field.size || 14,
+        fontFamily: field.fontFamily || 'Helvetica',
+        bold: field.bold || false,
+        italic: field.italic || false,
+        underline: field.underline || false,
+        color: field.color || '#000000',
+        bindColumn: field.bindColumn || null,
+        useColumn: field.useColumn || false
+      }))
+    }
+
+    // Restore custom fonts
+    if (config.customFonts && Array.isArray(config.customFonts)) {
+      customFonts.value = []
+      for (const font of config.customFonts) {
+        try {
+          // Convert base64 back to Uint8Array
+          const binaryString = atob(font.bytes)
+          const bytes = new Uint8Array(binaryString.length)
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i)
+          }
+          
+          customFonts.value.push({
+            name: font.name,
+            bytes: bytes
+          })
+        } catch (fontErr) {
+          console.error(`Erro ao carregar fonte ${font.name}:`, fontErr)
+        }
+      }
+    }
+
+    // Restore export option
+    if (config.exportOption) {
+      exportOption.value = config.exportOption
+    }
+
+    // Clear file input
+    event.target.value = ''
+
+    status.value = 'Configuração importada com sucesso!'
+    setTimeout(() => {
+      status.value = ''
+    }, 3000)
+  } catch (err) {
+    console.error('Erro ao importar configuração:', err)
+    status.value = 'Erro ao importar configuração: ' + err.message
+    event.target.value = ''
+  }
+}
+
 //processar arquivo CSV
 const handleCsvUpload = (event) => {
   const file = event.target.files?.[0]
   if (!file) return
 
-  //para zerar a contagem de pag por arquivo
-  downloadUrl.value = '';
-  urlCount.value = 0;
-
+  manualInput.value = '' // Limpa o input manual
   urls.value = '' // Limpa o textarea para evitar confusão
   csvData.value = []
   csvFileName.value = ''
+  status.value = ''
+  qrDataColumn.value = null
 
   Papa.parse(file, {
     header: true,
     skipEmptyLines: true,
     complete: (results) => {
-      if (results.data && results.meta.fields.includes('valor')) {
-        csvData.value = results.data.filter(row => row.valor && row.valor.trim() !== '');
+      if (results.data && results.data.length > 0 && results.meta.fields) {
+        csvData.value = results.data; // Apenas carrega os dados
         csvFileName.value = file.name
-
-        // Força a atualização da pré-visualização com a primeira URL do CSV
+        activeTab.value = 'batch'
+        qrDataColumn.value = null 
+        
         if (csvData.value.length > 0) {
           generatePreview()
         }
-
       } else {
-        status.value = 'Erro: O CSV precisa ter uma coluna chamada "valor".'
+        status.value = '⚠️ Erro: O CSV está vazio ou não possui um cabeçalho válido.' // Mensagem de erro atualizada
       }
     },
     error: (err) => {
-      status.value = 'Erro ao ler o CSV: ' + err.message
+      status.value = '⚠️ Erro ao ler o CSV: ' + err.message
     }
   })
 }
@@ -705,8 +975,11 @@ const getPageDimensions = () => {
 // Auto-update preview when parameters change
 watchEffect(() => {
   // Watch all reactive values
-  const deps = [
+    const deps = [
+    manualInput.value,
     urls.value,
+    activeTab.value,
+    csvData.value.length,
     pageSize.value,
     pageRotation.value,
     customW.value,
@@ -723,8 +996,8 @@ watchEffect(() => {
     qrColor.value,
     qrBackground.value,
     state.value.templateBytes,
-    textFields.value.length,
-    ...textFields.value.flatMap(f => [f.text, f.x, f.y, f.size, f.fontFamily, f.bold, f.italic, f.underline, f.color]),
+    	textFields.value.length,
+    	...textFields.value.flatMap(f => [f.text, f.x, f.y, f.size, f.fontFamily, f.bold, f.italic, f.underline, f.color, f.useColumn, f.bindColumn]),
     customFonts.value.length,
     ...customFonts.value.map(f => f.name)
   ]
@@ -745,19 +1018,21 @@ const generatePreview = async () => {
       previewUrl.value = ''
     }
 
-    //para suportar CSV
     let urlList = []
-    if (csvData.value.length > 0) {
-      // Pega as URLs do CSV
-      urlList = csvData.value.map(item => item.valor)
+    
+    // Decide qual fonte de dados usar com base na aba ativa
+    if (activeTab.value === 'manual') {
+      // Modo manual: usa o input manual
+      const input = manualInput.value.trim()
+      if (input) {
+        urlList = [input]
+      }
     } else {
-      // Senão, pega as URLs do textarea
-      urlList = urls.value
-        .split(/\r?\n/)
-        .map((s) => s.trim())
-        .filter(Boolean)
+      // Modo batch: usa CSV
+      if (csvData.value.length > 0) {
+        urlList = csvData.value.map(item => item[qrDataColumn.value])
+      }
     }
-    //continuação normal
 
     if (urlList.length === 0) {
       // Don't show error, just return
@@ -771,6 +1046,14 @@ const generatePreview = async () => {
 
     let pageW = 595
     let pageH = 842 // A4 default
+
+    // Prepare a sample data row for preview (CSV first row or manual input)
+    let sampleRow = null
+    if (activeTab.value === 'batch' && csvData.value.length > 0) {
+      sampleRow = csvData.value[0]
+    } else if (activeTab.value === 'manual' && manualInput.value && manualInput.value.trim()) {
+      sampleRow = { valor: manualInput.value.trim() }
+    }
 
     if (state.value.templateType === 'pdf') {
       const src = state.value.templatePdf
@@ -816,7 +1099,7 @@ const generatePreview = async () => {
       
       page.drawPage(embedded, drawOptions)
       await drawQrOnPage(pdfDoc, page, urlList[0], font)
-      await drawTextFields(pdfDoc, page)
+      await drawTextFields(pdfDoc, page, sampleRow)
     } else {
       // Use helper function for page dimensions
       const dims = getPageDimensions()
@@ -857,7 +1140,7 @@ const generatePreview = async () => {
         })
       }
       await drawQrOnPage(pdfDoc, page, urlList[0], font)
-      await drawTextFields(pdfDoc, page)
+      await drawTextFields(pdfDoc, page, sampleRow)
     }
 
     const pdfBytes = await pdfDoc.save()
@@ -872,31 +1155,37 @@ const generatePreview = async () => {
 
 //funcao para organizar a geracao do PDF
 const startGeneration = async () => {
-  status.value = 'Iniciando...'
+  status.value = '⏳ Iniciando...'
   downloadUrl.value = ''
 
-  // Decide qual especialista chamar com base na opção do usuário
-  if (exportOption.value === 'single_pdf') {
-    let urlList = [];
-    if (csvData.value.length > 0) {
-      // Extrai APENAS as URLs para a função de PDF único
-      urlList = csvData.value.map(item => item.valor);
-    } else {
-      urlList = urls.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  // Lógica diferente para cada aba
+  if (activeTab.value === 'manual') {
+    // Modo manual: gera sempre um PDF único com uma página
+    const input = manualInput.value.trim();
+    
+    if (!input) {
+      status.value = 'Erro: Insira um conteúdo para o QR Code.';
+      return;
     }
     
-    if (urlList.length === 0) {
-      status.value = 'Erro: Nenhuma URL fornecida.';
-      return;
-    }
-    // Chama a função antiga com a lista simples de URLs
-    await generateSinglePDF(urlList);
-  } else if (exportOption.value === 'multiple_pdfs_zip') {
+    // Sempre gera um PDF único no modo manual
+    await generateSinglePDF([input]);
+    } else {
+    // Modo batch: usa CSV e respeita a opção de exportação
     if (csvData.value.length === 0) {
-      status.value = 'Erro: Para gerar um ZIP, por favor, carregue um arquivo CSV com a coluna "nome_arquivo".';
+      status.value = 'Erro: Carregue um arquivo CSV para geração em batch.';
       return;
     }
-    await generateZipWithMultiplePDFs(csvData.value);
+    if (!qrDataColumn.value) {
+    status.value = 'Erro: Por favor, selecione a coluna que contém os dados do QR Code.';
+    return;
+    }
+    if (exportOption.value === 'single_pdf') {
+      // Passa os objetos CSV (para permitir preencher campos via colunas)
+      await generateSinglePDF(csvData.value);
+    } else if (exportOption.value === 'multiple_pdfs_zip') {
+      await generateZipWithMultiplePDFs(csvData.value);
+    }
   }
 }
 
@@ -930,11 +1219,13 @@ const generateSinglePDF = async (urlList) => {
         if (pageRotation.value === 90) { drawOptions.x = pageW } else if (pageRotation.value === 180) { drawOptions.x = pageW; drawOptions.y = pageH } else if (pageRotation.value === 270) { drawOptions.y = pageH }
       }
 
-      for (const u of urlList) {
+      for (const item of urlList) {
+        // item can be either a string (manual mode) or an object (CSV row)
+        const u = typeof item === 'string' ? item : (item[qrDataColumn.value] || '')
         const page = pdfDoc.addPage([pageW, pageH])
         page.drawPage(embedded, drawOptions)
         await drawQrOnPage(pdfDoc, page, u, font)
-        await drawTextFields(pdfDoc, page)
+        await drawTextFields(pdfDoc, page, typeof item === 'object' ? item : null)
       }
     } else {
       const dims = getPageDimensions(); pageW = dims.width; pageH = dims.height
@@ -943,7 +1234,8 @@ const generateSinglePDF = async (urlList) => {
         bgBytes = await imageElementToPngBytes(state.value.templateImage)
       }
 
-      for (const u of urlList) {
+      for (const item of urlList) {
+        const u = typeof item === 'string' ? item : (item[qrDataColumn.value] || '')
         const page = pdfDoc.addPage([pageW, pageH])
         if (!bgBytes) {
           const hex = backgroundColor.value.replace('#', ''); const r = parseInt(hex.substring(0, 2), 16) / 255, g = parseInt(hex.substring(2, 4), 16) / 255, b = parseInt(hex.substring(4, 6), 16) / 255
@@ -955,7 +1247,7 @@ const generateSinglePDF = async (urlList) => {
           page.drawImage(png, { x: (pageW - dims.width) / 2, y: (pageH - dims.height) / 2, width: dims.width, height: dims.height })
         }
         await drawQrOnPage(pdfDoc, page, u, font)
-        await drawTextFields(pdfDoc, page)
+        await drawTextFields(pdfDoc, page, typeof item === 'object' ? item : null)
       }
     }
 
@@ -964,7 +1256,7 @@ const generateSinglePDF = async (urlList) => {
     const url = URL.createObjectURL(blob)
     downloadUrl.value = url
     urlCount.value = urlList.length
-    status.value = 'Concluído.'
+    status.value = '✅ Concluído.'
 
     setTimeout(() => {
       const a = document.createElement('a'); a.href = url; a.download = 'qrs.pdf';
@@ -986,7 +1278,7 @@ const generateZipWithMultiplePDFs = async (dataList) => {
     let counter = 1
     for (const item of dataList) {
       status.value = `Gerando PDF ${counter} de ${dataList.length}...`
-      const u = item.valor
+      const u = item[qrDataColumn.value]
 
       const pdfDoc = await PDFDocument.create()
       pdfDoc.registerFontkit(fontkit)
@@ -1009,7 +1301,7 @@ const generateZipWithMultiplePDFs = async (dataList) => {
           else if (pageRotation.value === 270) { drawOptions.y = pageH }
         }
         page.drawPage(embedded, drawOptions)
-        await drawQrOnPage(pdfDoc, page, u, font); await drawTextFields(pdfDoc, page)
+    await drawQrOnPage(pdfDoc, page, u, font); await drawTextFields(pdfDoc, page, item)
       } else {
         const dims = getPageDimensions(); pageW = dims.width; pageH = dims.height
         const page = pdfDoc.addPage([pageW, pageH])
@@ -1023,7 +1315,7 @@ const generateZipWithMultiplePDFs = async (dataList) => {
           const r = parseInt(hex.substring(0, 2), 16) / 255, g = parseInt(hex.substring(2, 4), 16) / 255, b = parseInt(hex.substring(4, 6), 16) / 255
           page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: rgb(r, g, b) })
         }
-        await drawQrOnPage(pdfDoc, page, u, font); await drawTextFields(pdfDoc, page)
+  await drawQrOnPage(pdfDoc, page, u, font); await drawTextFields(pdfDoc, page, item)
       }
 
       const pdfBytes = await pdfDoc.save()
@@ -1041,7 +1333,7 @@ const generateZipWithMultiplePDFs = async (dataList) => {
     const url = URL.createObjectURL(content)
     downloadUrl.value = url
     urlCount.value = dataList.length
-    status.value = 'Concluído.'
+    status.value = '✅ Concluído.'
 
     setTimeout(() => {
       const a = document.createElement('a'); a.href = url; a.download = 'qrs.zip';
@@ -1054,33 +1346,51 @@ const generateZipWithMultiplePDFs = async (dataList) => {
 }
 
 // Draw text fields on page
-const drawTextFields = async (pdfDoc, page) => {
+// Accepts an optional dataRow (object) to fill fields bound to CSV columns
+const drawTextFields = async (pdfDoc, page, dataRow = null) => {
   for (const field of textFields.value) {
-    if (!field.text) continue // Skip empty fields
-    
+    // Determine the text to render: priority
+    // 1) bound column (field.bindColumn) with dataRow
+    // 2) template in field.text using {{col}}
+    // 3) static field.text
+    let displayText = ''
+
+    if (field.useColumn && field.bindColumn && dataRow && dataRow[field.bindColumn] !== undefined) {
+      displayText = dataRow[field.bindColumn]
+    } else if (field.text && dataRow) {
+      // Replace any {{col}} occurrences
+      displayText = String(field.text).replace(/{{\s*([^}]+)\s*}}/g, (m, p1) => {
+        return dataRow[p1] !== undefined ? String(dataRow[p1]) : ''
+      })
+    } else if (field.text) {
+      displayText = field.text
+    }
+
+    if (!displayText) continue // nothing to draw
+
     // Parse color from hex
-    const hex = field.color.replace('#', '')
+    const hex = (field.color || '#000000').replace('#', '')
     const r = parseInt(hex.substring(0, 2), 16) / 255
     const g = parseInt(hex.substring(2, 4), 16) / 255
     const b = parseInt(hex.substring(4, 6), 16) / 255
-    
+
     // Determine font based on family and styles
     const family = field.fontFamily || 'Helvetica'
     const isBold = field.bold || false
     const isItalic = field.italic || false
-    
+
     let textFont
-    
+
     // Check if it's a custom font
     const customFont = customFonts.value.find(f => f.name === family)
-    
+
     if (customFont) {
       // Use custom font (custom fonts don't support bold/italic variants)
       textFont = await pdfDoc.embedFont(customFont.bytes)
     } else {
       // Use standard fonts with variants
       let fontToEmbed
-      
+
       if (family === 'Helvetica') {
         if (isBold && isItalic) {
           fontToEmbed = StandardFonts.HelveticaBoldOblique
@@ -1115,23 +1425,24 @@ const drawTextFields = async (pdfDoc, page) => {
         // Fallback: Helvetica
         fontToEmbed = StandardFonts.Helvetica
       }
-      
+
       textFont = await pdfDoc.embedFont(fontToEmbed)
     }
+
     const yPos = page.getHeight() - field.y - field.size
-    
+
     // Draw text
-    page.drawText(field.text, {
+    page.drawText(String(displayText), {
       x: field.x,
       y: yPos,
       size: field.size,
       font: textFont,
       color: rgb(r, g, b),
     })
-    
+
     // Draw underline if enabled
     if (field.underline) {
-      const textWidth = textFont.widthOfTextAtSize(field.text, field.size)
+      const textWidth = textFont.widthOfTextAtSize(String(displayText), field.size)
       const underlineY = yPos - 2 // Slightly below the text baseline
       page.drawLine({
         start: { x: field.x, y: underlineY },
@@ -1289,27 +1600,1146 @@ function resolveQRCodeCtor(){
   }
   return null
 }
+
+window.teste_gerarPDF = generateSinglePDF; // para testes no console
+window.teste_gerarZip = generateZipWithMultiplePDFs; // para testes no console
 </script>
 
 <style scoped>
-/* 1. Padronização de Cores e Estilos */
-:main-layout {
-  --primary-color: #007bff; /* Azul para ações principais */
-  --primary-hover: #0056b3;
-  --secondary-color: #28a745; /* Verde para ações "positivas" (Importar) */
-  --secondary-hover: #218838;
-  --neutral-color: #6c757d;  /* Cinza para ações "neutras" (Exportar) */
-  --neutral-hover: #5a6268;
-  --card-bg: #ffffff;
-  --card-border-radius: 8px;
-  --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+/* Main Layout - Two columns */
+.main-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-top: 1.5rem;
 }
 
-/* 2. O CardView para as Configurações Principais */
+.main-layout.loader-view {
+  /* make loader take full width and more vertical space */
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+@media (max-width: 1200px) {
+  .main-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Form Section */
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.form-section--fullscreen {
+  width: 100%;
+  max-width: none;
+  min-height: calc(100vh - 140px);
+  background: #fff;
+  padding: 1rem;
+  border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.06);
+}
+
+.csv-preview {
+  margin-top: 0.5rem;
+}
+
+.csv-preview .csv-table-wrapper {
+  max-height: 300px; /* taller preview */
+  overflow: auto;
+}
+
+.csv-preview table thead th {
+  position: sticky;
+  top: 0;
+  background: #fafafa;
+  z-index: 2;
+}
+
+.template-info {
+  padding: 0.75rem;
+  background-color: #e7f3ff;
+  border-left: 4px solid #0066cc;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-top: 1rem;
+  border-top: 2px solid #eee;
+}
+
+button.primary {
+  background-color: #0066cc;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+button.primary:hover {
+  background-color: #0052a3;
+}
+
+button.secondary {
+  background-color: #6c757d;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+button.secondary:hover {
+  background-color: #5a6268;
+}
+
+.import-btn {
+  background-color: #28a745;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+  display: inline-block;
+  margin: 0;
+}
+
+.import-btn:hover {
+  background-color: #218838;
+}
+
+.config-actions {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+button.secondary {
+  background-color: #6c757d;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+button.secondary:hover {
+  background-color: #5a6268;
+}
+
+.import-btn {
+  background-color: #28a745;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+  display: inline-block;
+  margin: 0;
+}
+
+.import-btn:hover {
+  background-color: #218838;
+}
+
+.config-actions {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Preview Section - Sticky */
+.preview-section {
+  position: sticky;
+  top: 1rem;
+  height: fit-content;
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-section h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
+  color: #333;
+}
+
+.preview-info {
+  margin-bottom: 1rem;
+}
+
+.preview-container {
+  flex: 1;
+  min-height: 80vh;
+  max-height: 80vh;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #f5f5f5;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.pdf-preview {
+  width: 100%;
+  height: 80vh;
+  border: none;
+  background-color: white;
+}
+
+.preview-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #999;
+  padding: 2rem;
+  text-align: center;
+}
+
+.preview-placeholder p {
+  margin: 0.5rem 0;
+}
+
+.small {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+/* Improve form readability */
+fieldset {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 1rem;
+  margin: 0;
+}
+
+legend {
+  font-weight: 600;
+  padding: 0 0.5rem;
+  color: #333;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #555;
+}
+
+input, select, textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+
+textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.rotate-btn {
+  max-width: 40px;
+  max-height: 40px;
+  padding: 0.75rem 1rem;
+  background-color: #818181;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.5rem;
+  font-weight: 400;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.rotate-btn:hover {
+  background-color: #4a4a4a;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(23, 162, 184, 0.3);
+}
+
+.rotate-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Template Controls Row */
+.template-controls-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.template-control {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+
+.template-control input,
+.template-control select {
+  width: 100%;
+}
+
+/* Template file input - flexible */
+.template-file {
+  flex: 1;
+  min-width: 0;
+}
+
+button.secondary {
+  background-color: #6c757d;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+button.secondary:hover {
+  background-color: #5a6268;
+}
+
+.import-btn {
+  background-color: #28a745;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+  display: inline-block;
+  margin: 0;
+}
+
+.import-btn:hover {
+  background-color: #218838;
+}
+
+.config-actions {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+/* Rotate button - aligned to right */
+.template-rotate {
+  flex-shrink: 0;
+  align-items: flex-end;
+}
+
+.rotate-btn-square {
+  width: 60px;
+  height: 42px;
+  padding: 0;
+  background-color: #818181;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.5rem;
+  font-weight: 400;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+}
+
+.rotate-btn-square:hover {
+  background-color: #4a4a4a;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(23, 162, 184, 0.3);
+}
+
+.rotate-btn-square:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Page Controls Row */
+.page-controls-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.page-control {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+
+.page-control input,
+.page-control select {
+  width: 100%;
+}
+
+/* Page size - flexible */
+.page-size {
+  flex: 1;
+  min-width: 150px;
+}
+
+/* Page dimensions - flexible */
+.page-dimension {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* Background color - fixed 80px */
+.page-bg-color {
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.page-bg-color input[type="color"] {
+  height: 42px;
+  padding: 0.25rem;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.inline input {
+  width: auto;
+  flex: 1;
+}
+
+input[type="color"] {
+  cursor: pointer;
+  height: 42px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+  color: #555;
+  width: 50px;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+  height: auto;
+  cursor: pointer;
+  margin: 0;
+  transform: scale(1.2);
+}
+
+/* QR Controls - Single Row Layout */
+.qr-controls-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.qr-control {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+
+.qr-control input,
+.qr-control select {
+  width: 100%;
+}
+
+/* QR Size - min 130px, flexible */
+.qr-size {
+  flex: 1;
+  min-width: 130px;
+}
+
+/* Position fields - min 180px, flexible */
+.qr-position {
+  flex: 1.4;
+  min-width: 180px;
+}
+
+/* ECC Level - min 100px, flexible */
+.qr-ecc {
+  flex: 0.8;
+  min-width: 100px;
+}
+
+/* Margin - min 130px, flexible */
+.qr-margin {
+  flex: 1;
+  min-width: 130px;
+}
+
+/* QR Text Controls - Second Row Layout */
+.qr-text-controls-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.qr-text-control {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+
+.qr-text-control input,
+.qr-text-control select {
+  width: 100%;
+}
+
+/* Render text - min 200px, flexible */
+.qr-render-text {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Font size - min 200px, flexible */
+.qr-font-size {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Max chars - min 200px, flexible */
+.qr-max-chars {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* QR Color - min 90px, fixed */
+.qr-color {
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.qr-color input[type="color"] {
+  height: 42px;
+  padding: 0.25rem;
+}
+
+/* Checkbox wrapper - fixed 50px for text width */
+.qr-checkbox-wrapper {
+  width: 50px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  cursor: pointer;
+}
+
+.checkbox-label-text {
+  font-size: 0.75rem;
+  text-align: center;
+  line-height: 1.1;
+  word-wrap: break-word;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 0.25rem;
+}
+
+.qr-checkbox {
+  width: auto !important;
+  height: auto !important;
+  cursor: pointer;
+  transform: scale(1.2);
+  margin: 0;
+}
+
+/* Text Fields Section */
+.text-fields-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+
+.add-field-btn {
+  background-color: #28a745;
+  color: white;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 0.2s;
+}
+
+.add-field-btn:hover {
+  background-color: #218838;
+}
+
+.no-fields {
+  padding: 2rem;
+  text-align: center;
+  background-color: #f8f9fa;
+  border: 2px dashed #ddd;
+  border-radius: 4px;
+  color: #999;
+}
+
+.text-field-item {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.field-header strong {
+  color: #333;
+  font-size: 1rem;
+}
+
+.remove-field-btn {
+  background-color: #dc3545;
+  color: white;
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background-color 0.2s;
+}
+
+.remove-field-btn:hover {
+  background-color: #c82333;
+}
+
+.text-field-item label {
+  margin-bottom: 0.75rem;
+}
+
+/* Text Field Controls - Single Row Layout */
+.text-field-controls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-top: 0.5rem;
+}
+
+.control-item {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+
+.control-item input,
+.control-item select {
+  width: 100%;
+}
+
+/* Flexible width items (Esquerda, Topo, Tamanho) */
+.control-flex {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Fixed width for font family */
+.control-font {
+  width: 200px;
+  flex-shrink: 0;
+}
+
+/* Fixed width for color */
+.control-color {
+  width: 60px;
+  flex-shrink: 0;
+}
+
+.control-color input[type="color"] {
+  height: 42px;
+  padding: 0.25rem;
+}
+
+/* Format buttons container */
+.control-format {
+  flex-shrink: 0;
+}
+
+.control-format .format-buttons {
+  margin-top: 0.25rem;
+}
+
+/* Formatting Buttons */
+.formatting-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background-color: white;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.format-label {
+  margin: 0;
+  font-weight: 600;
+  color: #555;
+}
+
+.format-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.format-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: white;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  color: #555;
+}
+
+.format-btn:hover:not(:disabled) {
+  border-color: #999;
+  background-color: #f5f5f5;
+}
+
+.format-btn.active {
+  background-color: #0066cc;
+  border-color: #0066cc;
+  color: white;
+}
+
+.format-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.format-btn:disabled,
+.format-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background-color: #f5f5f5;
+  border-color: #ddd;
+}
+
+.format-btn strong,
+.format-btn em,
+.format-btn span {
+  pointer-events: none;
+}
+
+/* Custom Fonts Section */
+.upload-font {
+  margin-bottom: 1rem;
+}
+
+.upload-font-btn {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  background-color: #6c757d;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.upload-font-btn:hover {
+  background-color: #5a6268;
+}
+
+.upload-font-btn input[type="file"] {
+  display: none;
+}
+
+.font-loading {
+  padding: 0.75rem;
+  background-color: #fff3cd;
+  border-left: 4px solid #ffc107;
+  border-radius: 4px;
+  color: #856404;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.font-error {
+  padding: 0.75rem;
+  background-color: #f8d7da;
+  border-left: 4px solid #dc3545;
+  border-radius: 4px;
+  color: #721c24;
+  margin-bottom: 1rem;
+}
+
+.custom-fonts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.custom-font-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.custom-font-item:hover {
+  background-color: #f8f9fa;
+}
+
+.custom-font-item span {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.custom-font-item button {
+  padding: 0.4rem 0.8rem;
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s;
+}
+
+.custom-font-item button:hover {
+  background-color: #c82333;
+}
+
+.no-fonts {
+  padding: 1.5rem;
+  text-align: center;
+  background-color: #f8f9fa;
+  border: 2px dashed #ddd;
+  border-radius: 4px;
+  color: #999;
+  font-style: italic;
+}
+
+.data-source-separator {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: #999;
+  margin: 1rem 0;
+}
+.data-source-separator::before,
+.data-source-separator::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #ddd;
+}
+.data-source-separator:not(:empty)::before {
+  margin-right: .25em;
+}
+.data-source-separator:not(:empty)::after {
+  margin-left: .25em;
+}
+.csv-info {
+  margin-top: 0.5rem;
+  display: block;
+  color: #0066cc;
+}
+
+.export-option-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-weight: 500;
+  color: #555;
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Tab Navigation Styles */
+.tab-navigation {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.tab-button {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #666;
+  font-weight: 500;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  bottom: -2px;
+}
+
+.tab-button:hover {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.tab-button.active {
+  color: #0066cc;
+  border-bottom-color: #0066cc;
+  background: #f0f8ff;
+  font-weight: 600;
+}
+
+.tab-content {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Enhanced CSV Info */
+.csv-info {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  display: block;
+  color: #0066cc;
+  background-color: #e7f3ff;
+  border-left: 4px solid #0066cc;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+/* Template file styling for batch tab */
+.tab-content .template-control {
+  margin-top: 0;
+}
+
+.tab-content .template-file input[type="file"] {
+  cursor: pointer;
+}
+
+.tab-content .template-file input[type="file"]::-webkit-file-upload-button {
+  background-color: #0066cc;
+  color: white;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.tab-content .template-file input[type="file"]::-webkit-file-upload-button:hover {
+  background-color: #0052a3;
+}
+
+/* Manual tab textarea styling */
+.tab-content textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* QR Code Settings - Basic and Advanced */
+.qr-basic-settings {
+  margin-bottom: 0.5rem;
+}
+
+.advanced-toggle {
+  margin: 0.75rem 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.advanced-toggle::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, #ddd, transparent);
+}
+
+.advanced-toggle-btn {
+  background: none;
+  border: none;
+  padding: 0.25rem 0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #6c757d;
+  text-align: left;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.advanced-toggle-btn:hover {
+  color: #495057;
+}
+
+.advanced-toggle-btn:active {
+  color: #0066cc;
+}
+
+.qr-advanced-settings {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background-color: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  animation: expandDown 0.3s ease-out;
+}
+
+@keyframes expandDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive adjustments for QR controls */
+@media (max-width: 768px) {
+  .qr-controls-row {
+    flex-wrap: wrap;
+  }
+  
+  .qr-control {
+    min-width: calc(50% - 0.375rem);
+  }
+  
+  .qr-text-controls-row {
+    flex-wrap: wrap;
+  }
+  
+  .qr-text-control {
+    min-width: calc(50% - 0.375rem);
+  }
+}
+</style>
+
+<style scoped>
+
+/* 1. O Novo Cabeçalho (Banner) */
+.app-header {
+  background-color: #2c3e50; /* Um azul-escuro/cinza corporativo */
+  color: #ffffff;
+  padding: 1.5rem 2rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #ffffff; /* Garante a cor branca */
+}
+
+.app-header .hint {
+  margin: 0.25rem 0 0 0;
+  font-size: 1rem;
+  color: #bdc3c7; /* Um cinza-claro para o subtítulo */
+  font-weight: 400;
+}
+
+/* 2. O CardView para as Configurações */
 .config-card {
-  background: var(--card-bg);
-  border-radius: var(--card-border-radius);
-  box-shadow: var(--card-shadow);
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   border: 1px solid #e9ecef;
   padding: 1.25rem 1.5rem;
   margin-top: 1rem;
@@ -1324,13 +2754,20 @@ function resolveQRCodeCtor(){
   margin-left: -0.5rem;
 }
 
-/* 3. Classe de Espaçamento para as outras seções */
+/* 3. Classe de Espaçamento para as seções */
 .spaced-section {
-  margin-top: 1.75rem; /* Aumenta o espaçamento entre as seções */
+  margin-top: 1.75rem;
 }
 
+/* 4. Divisor para seções dentro do card */
+.card-divider {
+  border: none;
+  border-top: 1px solid #eee; /* Uma linha cinza clara */
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
+}
 
-/* 4. Novo Sistema de Botões Padronizado (Design Amigável) */
+/* 5. Novo Sistema de Botões (Design Amigável) */
 .btn {
   display: inline-block;
   font-weight: 600;
@@ -1343,35 +2780,28 @@ function resolveQRCodeCtor(){
   padding: 0.65rem 1rem;
   font-size: 0.95rem;
   line-height: 1.5;
-  text-decoration: none; /* Para o link de download */
+  text-decoration: none;
   
-  /* --- A MÁGICA ACONTECE AQUI --- */
-  
-  /* Bordas arredondadas que você pediu */
+  /* Bordas arredondadas */
   border-radius: 8px; 
   
-  /* Sombra sutil para dar um leve relevo */
+  /* Sombra sutil */
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   
-  /* Animação suave para Clicar e passar o mouse */
+  /* Animação suave */
   transition: all 0.2s ease-in-out; 
 }
 
-/* Efeito INTERATIVO ao passar o mouse */
+/* Efeito Interativo */
 .btn:hover {
-  /* "Levanta" o botão levemente */
   transform: translateY(-2px); 
-  
-  /* Aumenta a sombra para um efeito 3D */
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); 
 }
 
-/* Efeito ao Clicar (feedback visual) */
 .btn:active {
   transform: translateY(1px);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
-
 
 /* Botão Principal (Azul) */
 .btn-primary {
@@ -1409,48 +2839,16 @@ function resolveQRCodeCtor(){
   color: #ffffff;
 }
 
-/* Botão de Largura Total (continua o mesmo) */
+/* Botão de Largura Total */
 .btn-full {
   width: 100%;
 }
 
-/* 5. Organiza os botões de Importar/Exportar */
+/* 6. Layout dos botões Importar/Exportar */
 .config-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr; /* Duas colunas iguais */
-  gap: 1rem; /* Espaço entre eles */
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
   margin-top: 1.75rem;
 }
-
-
-.app-header {
-  background-color: #2c3e50; /* Um azul-escuro/cinza corporativo */
-  color: #ffffff;
-  padding: 1.5rem 2rem;
-  border-radius: var(--card-border-radius);
-  margin-bottom: 2rem;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-}
-
-.app-header h1 {
-  margin: 0;
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: #ffffff; /* Garante a cor branca */
-}
-
-.app-header .hint {
-  margin: 0.25rem 0 0 0;
-  font-size: 1rem;
-  color: #bdc3c7; /* Um cinza-claro para o subtítulo */
-  font-weight: 400;
-}
-
-.card-divider {
-  border: none;
-  border-top: 1px solid #eee; /* Uma linha cinza clara */
-  margin-top: 1.25rem;
-  margin-bottom: 1.25rem;
-}
-
 </style>
