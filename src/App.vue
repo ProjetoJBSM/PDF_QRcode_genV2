@@ -154,8 +154,11 @@
             Cor de fundo
             <input v-model="backgroundColor" type="color" />
           </label>
+          <label class="page-control page-dimension">
+            Margem direita texto (pt)
+            <input v-model.number="textRightMargin" type="number" min="0" max="500" step="5" @change="generatePreview"/>
+          </label>
         </div>
-
       <fieldset>
         <legend>Configurações do QR Code</legend>
         
@@ -299,7 +302,7 @@
             </label>
             <label class="control-item control-font-size">
               Tamanho (pt)
-              <div style="display:flex; gap:0.5rem; align-items:center;">
+              <div style="display:flex; gap:0.2 5rem; align-items:center;">
                 <input v-model.number="field.size" type="number" min="6" step="1" @change="generatePreview" />
               </div>
             </label>
@@ -589,6 +592,7 @@ const fontSize = ref(12)
 const maxChars = ref(64)
 const qrColor = ref('#000000')
 const qrBackground = ref(true)
+const textRightMargin = ref(40) // Margem direita para ajuste automático de texto
 
 // Template state
 const templateFileInput = ref(null)
@@ -935,7 +939,8 @@ const exportConfiguration = () => {
         fontSize: fontSize.value,
         maxChars: maxChars.value,
         qrColor: qrColor.value,
-        qrBackground: qrBackground.value
+        qrBackground: qrBackground.value,
+        textRightMargin: textRightMargin.value
       },
       textFields: textFields.value.map(field => ({
         text: field.text,
@@ -1025,6 +1030,7 @@ const importConfiguration = async (event) => {
       maxChars.value = config.qrSettings.maxChars || 64
       qrColor.value = config.qrSettings.qrColor || '#000000'
       qrBackground.value = config.qrSettings.qrBackground !== undefined ? config.qrSettings.qrBackground : true
+      textRightMargin.value = config.qrSettings.textRightMargin !== undefined ? config.qrSettings.textRightMargin : 40
     }
 
     // Restore text fields
@@ -1598,6 +1604,7 @@ watchEffect(() => {
     maxChars.value,
     qrColor.value,
     qrBackground.value,
+    textRightMargin.value,
     state.value.templateBytes,
     	textFields.value.length,
     	...textFields.value.flatMap(f => [f.text, f.x, f.y, f.size, f.fontFamily, f.bold, f.italic, f.underline, f.color, f.useColumn, f.bindColumn]),
@@ -2091,25 +2098,38 @@ const drawTextFields = async (pdfDoc, page, dataRow = null) => {
       textFont = await pdfDoc.embedFont(fontToEmbed)
     }
 
-    const yPos = page.getHeight() - field.y - field.size
+    // Calculate available width (from X position to right edge of page minus right margin)
+    const availableWidth = page.getWidth() - field.x - (textRightMargin.value || 0)
+    
+    // Auto-adjust font size if text is too wide
+    let adjustedSize = field.size
+    let textWidth = textFont.widthOfTextAtSize(String(displayText), adjustedSize)
+    
+    // If text exceeds available width, reduce font size iteratively
+    const minFontSize = 6 // Minimum readable font size
+    while (textWidth > availableWidth && adjustedSize > minFontSize) {
+      adjustedSize -= 0.5 // Reduce by 0.5pt at a time
+      textWidth = textFont.widthOfTextAtSize(String(displayText), adjustedSize)
+    }
 
-    // Draw text
+    const yPos = page.getHeight() - field.y - adjustedSize
+
+    // Draw text with adjusted size
     page.drawText(String(displayText), {
       x: field.x,
       y: yPos,
-      size: field.size,
+      size: adjustedSize,
       font: textFont,
       color: rgb(r, g, b),
     })
 
-    // Draw underline if enabled
+    // Draw underline if enabled (using adjusted size)
     if (field.underline) {
-      const textWidth = textFont.widthOfTextAtSize(String(displayText), field.size)
       const underlineY = yPos - 2 // Slightly below the text baseline
       page.drawLine({
         start: { x: field.x, y: underlineY },
         end: { x: field.x + textWidth, y: underlineY },
-        thickness: Math.max(1, field.size / 12),
+        thickness: Math.max(1, adjustedSize / 12),
         color: rgb(r, g, b),
       })
     }
