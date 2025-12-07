@@ -1,534 +1,707 @@
 <template>
   <div>
-    <h1>Client-side QR Batch → PDF</h1>
-    <p class="hint">
-      Cole URLs (uma por linha), escolha um template (imagem ou PDF opcional), defina a posição/tamanho do QR e gere um PDF com uma página por URL — tudo no navegador.
-    </p>
+    <div class="app-container">
+      <!-- Stepper / Progress Indicator -->
+      <div style="margin: 1rem;">
+        <h1 class="app-title">Gerador de PDFs com QR Codes</h1>
+      </div>
+      <!-- Main content -->
 
-  <div class="main-layout" :class="{ 'loader-view': view === 'loader' }">
-  <form @submit.prevent class="form-section" :class="{ 'form-section--fullscreen': view === 'loader' }">
-      <fieldset v-if="view === 'loader'">
-        <legend>Dados</legend>
+      <!-- Tab entre manual e batch -->
+      <div v-if="currentStep == 1">
+        <div class="tab-navigation">
+          <button type="button" class="tab-button" :class="{ active: activeTab === 'manual' }"
+            @click="activeTab = 'manual'">
+            Geração Manual
+          </button>
+          <button type="button" class="tab-button" :class="{ active: activeTab === 'batch' }"
+            @click="activeTab = 'batch'">
+            Geração em Batch
+          </button>
+        </div>
+      </div>
 
-        <!-- Left column: settings -->
-          <div class="loader-left">
-            <!-- Tab Navigation -->
-            <div class="tab-navigation">
-              <button 
-                type="button" 
-                class="tab-button" 
-                :class="{ active: activeTab === 'manual' }"
-                @click="activeTab = 'manual'"
-              >
-                Geração Manual
-              </button>
-              <button 
-                type="button" 
-                class="tab-button" 
-                :class="{ active: activeTab === 'batch' }"
-                @click="activeTab = 'batch'"
-              >
-                Geração em Batch
-              </button>
-            </div>
+      <!-- Configs principais -->
+      <div class="main-layout">
+        <div class="content-wrapper">
+          <!-- Detalhes do CSV -->
+          <form @submit.prevent class="form-section">
+            <!-- ETAPA 1: Entrada de Dados (CSV/Texto) -->
+            <fieldset v-show="currentStep === 1" style="display: flex; justify-content: space-between;">
+              <legend>Etapa 1: Entrada de Dados</legend>
 
-            <!-- Manual Generation Tab -->
-            <div v-show="activeTab === 'manual'" class="tab-content">
-              <label>
-                Conteúdo do QR Code
-                <textarea
-                  v-model="manualInput"
-                  placeholder="Digite a URL ou texto para o QR Code&#10;Exemplo: https://example.com"
-                  rows="3"
-                ></textarea>
-              </label>
-              <p class="small" style="margin-top: 0.5rem; color: #666;">
-                Insira uma URL ou texto para gerar um único QR Code. Será gerado um PDF de uma página.
-              </p>
-            </div>
-
-            <!-- Batch Generation Tab -->
-            <div v-show="activeTab === 'batch'" class="tab-content">
-              <label class="template-control template-file">
-                Carregar arquivo CSV
-                <input
-                  ref="csvFileInput"
-                  type="file"
-                  accept=".csv"
-                  @change="handleCsvUpload"
-                />
-                <span v-if="csvFileName" class="csv-info small">
-                  Arquivo carregado: <strong>{{ csvFileName }}</strong> ({{ csvData.length }} linhas)
-                </span>
-              </label>
-
-              <div v-if="csvData.length > 0" class="csv-column-select" style="margin-top: 1rem;">
-                <label for="qrColumnSelect" style="font-weight: 600;">
-                  1. Selecione a coluna para o QR Code:
+              <!-- Manual Generation Tab -->
+              <div v-show="activeTab === 'manual'" class="tab-content">
+                <label>
+                  Conteúdo do QR Code
+                  <textarea v-model="manualInput"
+                    placeholder="Digite a URL ou texto para o QR Code&#10;Exemplo: https://example.com"
+                    rows="3"></textarea>
                 </label>
-                <select id="qrColumnSelect" v-model="qrDataColumn" style="width: 100%; margin-top: 0.25rem;">
-                  <option :value="null" disabled>-- Escolha a coluna com as URLs/textos --</option>
-                  <option v-for="col in csvPreviewColumns" :key="col" :value="col">
-                    {{ col }}
-                  </option>
-                </select>
-                <p v-if="!qrDataColumn" class="small" style="color: #dc3545; margin-top: 0.25rem;">
-                  ⚠️ É necessário selecionar uma coluna para continuar.
+                <p class="small" style="margin-top: 0.5rem; color: #666;">
+                  Insira uma URL ou texto para gerar um único QR Code. Será gerado um PDF de uma página.
                 </p>
               </div>
 
-              <!-- Range selection for batch rows -->
-              <div v-if="csvData.length > 0" class="range-selection" style="margin-top:1rem;">
-                <label style="font-weight:600; display:block;">Linhas para gerar (ex.: 1-10,14,18-22)</label>
-                <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
-                  <input type="text" v-model="rangeSpec" placeholder="1-10,14,18-22" style="flex:1; min-width:0; padding:8px;" />
-                  <button type="button" class="secondary" @click="setRangeAll">Todas</button>
+              <!-- Batch Generation Tab -->
+              <div>
+                <!-- CSV Preview Column (Step 1 only) -->
+                <div v-show="activeTab === 'batch'">
+
+                  <!-- divide visualizacao em dois caso hava csv carregado, mas topo fica normal-->
+                  <div v-if="csvData.length > 0" class="csv-uploaded">
+                    <!-- Configuracoes do csv -->
+                    <div class="tab-content">
+                      <label class="template-control template-file">
+                        Carregar arquivo CSV
+                        <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
+                          <div class="custom-file-input" style="flex: 1;">
+                            <input ref="csvFileInput" type="file" accept=".csv" @change="handleCsvUpload"
+                              style="display: none;" />
+                            <button type="button" class="file-select-btn" @click="$refs.csvFileInput.click()">
+                              📁 Escolher arquivo
+                            </button>
+                            <span class="file-name-display" v-if="csvFileName">
+                              {{ csvFileName }}
+                            </span>
+                            <span class="file-name-display placeholder" v-else>
+                              Nenhum arquivo selecionado
+                            </span>
+                          </div>
+                          <button v-if="currentStep === 1 && activeTab === 'batch' && csvData.length > 0" type="button"
+                            class="secondary" style="width:30%" @click="clearCsvData">
+                            Limpar Dados
+                          </button>
+                        </div>
+                        <span v-if="csvFileName" class="csv-info small" style="margin-top: 0.5rem; display: block;">
+                          <strong>{{ csvData.length }}</strong> {{ csvData.length === 1 ? 'entrada' : 'entradas' }}
+                          carregadas
+                        </span>
+                      </label>
+
+                      <div v-if="csvData.length > 0" class="csv-column-select" style="margin-top: 1rem;">
+                        <label for="qrColumnSelect" style="font-weight: 600;">
+                          1. Selecione a coluna para o QR Code:
+                        </label>
+                        <select id="qrColumnSelect" v-model="qrDataColumn" style="width: 100%; margin-top: 0.25rem;">
+                          <option :value="null" disabled>-- Escolha a coluna com as URLs/textos --</option>
+                          <option v-for="col in csvPreviewColumns" :key="col" :value="col">
+                            {{ col }}
+                          </option>
+                        </select>
+                        <p v-if="!qrDataColumn" class="small" style="color: #dc3545; margin-top: 0.25rem;">
+                          ⚠️ É necessário selecionar uma coluna para continuar.
+                        </p>
+                      </div>
+
+                      <!-- Range selection for batch rows -->
+                      <div v-if="csvData.length > 0" class="range-selection" style="margin-top:1rem;">
+                        <label style="font-weight:600; display:block;">Linhas para gerar (ex.: 1-10,14,18-22)</label>
+                        <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
+                          <input type="text" v-model="rangeSpec" placeholder="1-10,14,18-22"
+                            style="flex:1; min-width:0; padding:8px;" />
+                          <button type="button" class="secondary" @click="setRangeAll">Todas</button>
+                        </div>
+                        <p class="small" style="margin-top:0.25rem; color:#666;">Use sintaxe de intervalo (impressão):
+                          <code>1-10,14,18-22</code>. Valores baseados em 1 (primeira linha = 1). Use <code>all</code>
+                          ou
+                          deixe vazio para todas.
+                        </p>
+                        <p v-if="rangeError" class="small" style="color:#dc3545; margin-top:0.25rem;">{{ rangeError }}
+                        </p>
+                      </div>
+
+
+
+
+                    </div>
+
+
+                  </div>
+
+                  <div v-else class="tab-content">
+                    <label class="template-control template-file">
+                      Carregar arquivo CSV
+                      <div class="custom-file-input" style="margin-top: 0.5rem;">
+                        <input ref="csvFileInput" type="file" accept=".csv" @change="handleCsvUpload"
+                          style="display: none;" />
+                        <button type="button" class="file-select-btn" @click="$refs.csvFileInput.click()">
+                          📁 Escolher arquivo CSV
+                        </button>
+                        <span class="file-name-display" v-if="csvFileName">
+                          {{ csvFileName }}
+                        </span>
+                        <span class="file-name-display placeholder" v-else>
+                          Nenhum arquivo selecionado
+                        </span>
+                      </div>
+                    </label>
+                  </div>
                 </div>
-                <p class="small" style="margin-top:0.25rem; color:#666;">Use sintaxe de intervalo (impressão): <code>1-10,14,18-22</code>. Valores baseados em 1 (primeira linha = 1). Use <code>all</code> ou deixe vazio para todas.</p>
-                <p v-if="rangeError" class="small" style="color:#dc3545; margin-top:0.25rem;">{{ rangeError }}</p>
               </div>
 
-              <p class="small" style="margin-top: 0.5rem; color: #666;">
-                Para gerar ZIP com nomes personalizados, adicione também a coluna <strong>"nome_arquivo"</strong>.
-              </p>
+              <div style="margin-top: 2rem; grid: 1fr 9fr; align-self: self-end;">
+                <label class="secondary import-btn">
+                📤 Importar Configurações
+                <input type="file" accept=".json" @change="importConfiguration" style="display: none;" />
+              </label>
+              </div>
               
-              <label class="export-option-label" style="margin-top: 1rem;">
-                Formato de Saída
-                <select v-model="exportOption">
-                  <option value="single_pdf">PDF Único com várias páginas</option>
-                  <option value="multiple_pdfs_zip">ZIP com um PDF por página</option>
-                </select>
-              </label>
-            </div>
+            </fieldset> 
 
-            <div style="margin-top:1rem; display:flex; gap:0.5rem; align-items:center;">
-              <button type="button" class="primary" @click="goToEditor">Editar Template →</button>
-              <button type="button" class="secondary" @click="clearCsvData">Limpar CSV</button>
+            <!-- ETAPA 2: Configuração da Página -->
+            <fieldset v-show="currentStep === 2">
+              <legend>Etapa 2: Configuração da Página</legend>
+              <div class="step-content">
+
+                <div class="template-controls-row">
+                  <label class="template-control template-file">
+                    Template de fundo opcional (PDF, PNG ou JPG)
+                    <div class="file-input-container">
+                      <button class="file-select-btn" type="button" @click="$refs.templateFileInput.click()">
+                        Escolher arquivo
+                      </button>
+                      <span class="file-name-display">
+                        {{ templateFileName || 'Nenhum arquivo selecionado' }}
+                      </span>
+                      <input
+                        type="file"
+                        accept="application/pdf,image/png,image/jpeg"
+                        @change="handleTemplateFile"
+                        ref="templateFileInput"
+                        style="display: none;"
+                      />
+                    </div>
+                  </label>
+                  <label class="template-control template-rotate">
+                    Rotacionar
+                    <button type="button" class="rotate-btn-square" @click="rotatePage">
+                      ↺
+                    </button>
+                  </label>
+                </div>
+
+                <div class="page-controls-row" v-if="!state.templateType || state.templateType !== 'pdf'">
+                  <label class="page-control page-size">
+                    Tamanho da página
+                    <select v-model="pageSize">
+                      <option value="A4">A4</option>
+                      <option value="Letter">Letter</option>
+                      <option value="Custom">Personalizado…</option>
+                    </select>
+                  </label>
+                  <label v-if="pageSize === 'Custom'" class="page-control page-dimension">
+                    Largura (pt)
+                    <input v-model.number="customW" type="number" min="100" />
+                  </label>
+                  <label v-if="pageSize === 'Custom'" class="page-control page-dimension">
+                    Altura (pt)
+                    <input v-model.number="customH" type="number" min="100" />
+                  </label>
+                  <label v-if="!state.templateType" class="page-control page-bg-color">
+                    Cor de fundo
+                    <input v-model="backgroundColor" type="color" />
+                  </label>
+                  <label class="page-control page-dimension">
+                    Margem direita texto (pt)
+                    <input v-model.number="textRightMargin" type="number" min="0" max="500" step="5"
+                      @change="generatePreview" />
+                  </label>
+                </div>
+              </div>
+            </fieldset>
+
+            <!-- ETAPA 3: Configuração do QR Code -->
+            <fieldset v-show="currentStep === 3">
+              <legend>Etapa 3: Configuração do QR Code</legend>
+              <div class="step-content">
+                <div class="qr-basic-settings">
+                  <div class="qr-controls-row">
+                    <label class="qr-control qr-size">
+                      Tamanho do QR (pt)
+                      <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input v-model.number="qrSize" type="range" min="30" :max="maxQrSize" step="1"
+                          @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                        <input v-model.number="qrSize" type="number" min="30" :max="maxQrSize" step="1"
+                          @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                        <span class="small" style="width: 30px;">pt</span>
+                      </div>
+                    </label>
+                    <label class="qr-text-control qr-color">
+                      Cor do QR Code
+                      <input v-model="qrColor" type="color" />
+                    </label>
+                    <label class="qr-text-control qr-checkbox-wrapper">
+                      <span class="checkbox-label-text">Fundo branco</span>
+                      <input v-model="qrBackground" type="checkbox" class="qr-checkbox" />
+                    </label>
+                  </div>
+                  <div class="qr-controls-row">
+                    <label class="qr-control qr-position">
+                      Posição X - Esquerda (pt)
+                      <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input v-model.number="posX" type="range" min="0" :max="maxPosX" step="1"
+                          @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                        <input v-model.number="posX" type="number" min="0" :max="maxPosX" step="1"
+                          @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                        <span class="small" style="width: 30px;">pt</span>
+                      </div>
+                    </label>
+                    <label class="qr-control qr-position">
+                      Posição Y - Topo (pt)
+                      <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input v-model.number="posY" type="range" min="0" :max="maxPosY" step="1"
+                          @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                        <input v-model.number="posY" type="number" min="0" :max="maxPosY" step="1"
+                          @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                        <span class="small" style="width: 30px;">pt</span>
+                      </div>
+                    </label>
+                  </div>
+
+                  <p class="small" style="margin-top: 0.5rem;">
+                    72 pt ≈ 1 polegada; 1 mm ≈ 2.835 pt. A4 = 595×842 pt.
+                  </p>
+                </div>
+
+                <!-- Advanced Settings Toggle Button -->
+                <div class="advanced-toggle">
+                  <button type="button" class="advanced-toggle-btn" @click="showAdvancedQR = !showAdvancedQR">
+                    {{ showAdvancedQR ? '▼' : '▶' }} Configurações Avançadas
+                  </button>
+                </div>
+
+                <!-- Advanced QR Settings - Collapsible -->
+                <div v-show="showAdvancedQR" class="qr-advanced-settings">
+                  <div class="qr-controls-row">
+                    <label class="qr-control qr-ecc">
+                      Nível ECC (Correção de Erros)
+                      <select v-model="ecc" style="width: 100%;">
+                        <option value="L">L - Baixo (7%)</option>
+                        <option value="M">M - Médio (15%)</option>
+                        <option value="Q">Q - Alto (25%)</option>
+                        <option value="H">H - Muito Alto (30%)</option>
+                      </select>
+                    </label>
+                    <label class="qr-control qr-margin">
+                      Zona quieta (módulos)
+                      <input v-model.number="margin" type="number" min="0" style="width: 100%;" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+            </fieldset>
+
+            <!-- ETAPA 4: Campos de Texto e Imagens -->
+            <fieldset v-show="currentStep === 4">
+              <legend>Etapa 4: Personalização (Texto e Imagens)</legend>
+              <div class="step-content">
+
+                
+
+              <!-- Campo de texto -->
+              <fieldset style="max-height: 50%; flex: 1;">
+                
+
+                <legend>Campos de Texto</legend>
+                <div class="text-fields-header">
+                  <p class="small">Adicione campos de texto personalizados ao PDF</p>
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <button type="button" class="add-field-btn" @click="addTextField">
+                      + Adicionar Campo de Texto
+                    </button>
+                    <label class="add-font-btn">
+                      <input type="file" accept=".ttf,.otf" @change="loadCustomFontFile" style="display: none; margin: 0%; padding: 0%;">
+                      + Adicionar fonte (.ttf/.otf)</input>
+                    </label>
+                  </div>
+
+                </div>
+
+                <div v-if="textFields.length === 0" class="no-fields">
+                  <p class="small">Nenhum campo de texto adicionado ainda.</p>
+                </div>
+
+                <!-- Campo unitario para texto -->
+                <div class="step-content">
+                  <div v-for="(field, index) in textFields" :key="field.id" class="text-field-item">
+                    <div class="field-header">
+                      <strong>Campo {{ index + 1 }}</strong>
+                      <button type="button" class="remove-field-btn" @click="removeTextField(index)">Remover</button>
+                    </div>
+
+                    <!-- Entrada do texto/coluna csv-->
+                    <div>
+                      <label style="width: auto;">
+                        Texto
+                      </label>
+                      <div style="display: flex;">
+                        <select v-if="field.useColumn && activeTab === 'batch' && csvData.length > 0" v-model="field.bindColumn"
+                          style="padding:4px 8px; margin-top: none; height: 35px;">
+                          <option :value="null">-- selecione coluna --</option>
+                          <option v-for="col in csvPreviewColumns" :key="col" :value="col">{{ col }}</option>
+                        </select>
+                        <input v-else v-model="field.text" type="text"
+                          style="height: 35px;" placeholder="Digite o texto aqui..." />
+                        <label
+                          v-if="activeTab === 'batch' && csvData.length > 0" style="display:flex; align-items:center; gap:0.35rem; width:150px; flex-shrink:0; margin: 8px 0 8px 0;">
+                          <input  type="checkbox" v-model="field.useColumn" style="width: 20%;" /> Usar coluna CSV
+                        </label>
+                      </div>
+                    </div>
+
+                    <!-- Ajustes do texto/coluna csv-->
+                    <div class="text-field-controls">
+                      <label class="control-item control-flex">
+                        Esquerda (pt)
+                        <div style="display:flex; gap:0.5rem; align-items:center;">
+                          <input v-model.number="field.x" type="range" min="0" :max="maxTextPosX" step="1"
+                            @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                          <input v-model.number="field.x" type="number" min="0" :max="maxTextPosX" step="1"
+                            @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                          <span class="small" style="width: 20px;">pt</span>
+                        </div>
+                      </label>
+                      <label class="control-item control-flex">
+                        Topo (pt)
+                        <div style="display:flex; gap:0.5rem; align-items:center; padding: none;">
+                          <input v-model.number="field.y" type="range" min="0" :max="maxTextPosY" step="1"
+                            @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                          <input v-model.number="field.y" type="number" min="0" :max="maxTextPosY" step="1"
+                            @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                          <span class="small" style="width: 20px;">pt</span>
+                        </div>
+                      </label>
+                      <label class="control-item control-font">
+                        Família da Fonte
+                        <select v-model="field.fontFamily">
+                          <optgroup label="Fontes Padrão">
+                            <option value="Helvetica">Helvetica</option>
+                            <option value="Times">Times Roman</option>
+                            <option value="Courier">Courier</option>
+                          </optgroup>
+                          <optgroup v-if="customFonts.length > 0" label="Fontes Carregadas">
+                            <option v-for="font in customFonts" :key="font.name" :value="font.name">{{ font.name }}
+                            </option>
+                          </optgroup>
+                        </select>
+                      </label>
+                      <label class="control-item control-font-size">
+                        Tamanho
+                        <div style="display:flex; gap:0.2 5rem; align-items:center;">
+                          <input v-model.number="field.size" type="number" min="6" step="1" @change="generatePreview" />
+                        </div>
+                      </label>
+                      <label class="control-item control-color">
+                        Cor
+                        <input v-model="field.color" type="color" />
+                      </label>
+                      <label class="control-item control-format">
+                        Formatação
+                        <div class="format-buttons">
+                          <button type="button" class="format-btn" :class="{ active: field.bold }"
+                            @click="field.bold = !field.bold" title="Negrito"><strong>B</strong></button>
+                          <button type="button" class="format-btn" :class="{ active: field.italic }"
+                            @click="field.italic = !field.italic" title="Itálico"><em>I</em></button>
+                          <button type="button" class="format-btn" :class="{ active: field.underline }"
+                            @click="field.underline = !field.underline" title="Sublinhado"><span
+                              style="text-decoration: underline;">U</span></button>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </fieldset>
+
+              <!-- Campo de imagem -->
+              <fieldset style="max-height: 50%; flex: 1; ">
+                <legend>Campos de Imagem</legend>
+                <div class="text-fields-header">
+                  <p class="small">Adicione imagens personalizadas ao PDF</p>
+                  <button type="button" class="add-field-btn" @click="addImageField">
+                    + Adicionar Campo de Imagem
+                  </button>
+                </div>
+
+                <div v-if="imageFields.length === 0" class="no-fields">
+                  <p class="small">Nenhum campo de imagem adicionado ainda.</p>
+                </div>
+
+                <!-- Campo unitario para imagem -->
+                <div class="step-content">
+                  <div v-for="(field, index) in imageFields" :key="field.id" class="text-field-item">
+                    <div class="field-header">
+                      <strong>Imagem {{ index + 1 }}</strong>
+                      <button type="button" class="remove-field-btn" @click="removeImageField(index)">Remover</button>
+                    </div>
+
+                    <label class="template-control template-file">
+                    <div class="file-input-container">
+                      <button class="file-select-btn" type="button" @click="$refs['imageFileInput' + index][0].click()">
+                        Escolher arquivo
+                      </button>
+                      <span class="file-name-display">
+                        {{ field.fileName || 'Nenhum arquivo selecionado' }}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg"
+                        @change="(e) => handleImageUpload(e, index)"
+                        :ref="'imageFileInput' + index"
+                        style="display: none;"
+                      />
+                    </div>
+                  </label>
+
+                    <div class="text-field-controls">
+                      <label class="control-item control-flex">
+                        Esquerda (pt)
+                        <div style="display:flex; gap:0.5rem; align-items:center;">
+                          <input v-model.number="field.x" type="range" min="0" :max="maxTextPosX" step="1"
+                            @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                          <input v-model.number="field.x" type="number" min="0" :max="maxTextPosX" step="1"
+                            @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                          <span class="small" style="width: 20px;">pt</span>
+                        </div>
+                      </label>
+                      <label class="control-item control-flex">
+                        Topo (pt)
+                        <div style="display:flex; gap:0.5rem; align-items:center;">
+                          <input v-model.number="field.y" type="range" min="0" :max="maxTextPosY" step="1"
+                            @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                          <input v-model.number="field.y" type="number" min="0" :max="maxTextPosY" step="1"
+                            @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                          <span class="small" style="width: 20px;">pt</span>
+                        </div>
+                      </label>
+                      <label class="control-item control-flex">
+                        Escala (%)
+                        <div style="display:flex; gap:0.5rem; align-items:center;">
+                          <input v-model.number="field.scale" type="range" min="1" max="400" step="0.1"
+                            @input="onSliderChange" @change="generatePreview" style="flex:1;" />
+                          <input v-model.number="field.scale" type="number" min="1" max="400" step="0.1"
+                            @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
+                          <span class="small" style="width: 20px;">%</span>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </fieldset>
+
+              <!-- Campo de fontes custom -->
+             <!-- <fieldset style="height: 0%;">
+                <legend>Fontes Customizadas</legend>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                  <p class="small" style="margin-bottom: 0.5rem; color: #666;">
+                    <strong>Nota:</strong> Cada arquivo contém apenas uma variante (regular, negrito, itálico).
+                    Os botões de formatação não funcionam com fontes customizadas.
+                  </p>
+
+
+                </div>
+
+                <div v-if="fontLoading" class="font-loading">
+                  <span class="small">Carregando fonte...</span>
+                </div>
+
+                <div v-if="fontLoadError" class="font-error">
+                  <span class="small">{{ fontLoadError }}</span>
+                </div>
+
+                <div v-if="customFonts.length > 0" class="custom-fonts-list">
+                  <label class="small" style="font-weight: 600; margin: 0rem; display: block;">
+                    Fontes Carregadas ({{ customFonts.length }}):
+                  </label>
+                </div>
+
+                <div v-else class="no-fonts">
+                  <p class="small">Nenhuma fonte customizada carregada ainda.</p>
+                </div>
+
+                <div class="step-content">
+                  <div v-for="(font, index) in customFonts" :key="font.name" class="custom-font-item">
+                    <span class="font-name">
+                      {{ font.name }}
+                    </span>
+                    <button type="button" class="remove-font-btn" @click="removeCustomFont(index)"
+                      title="Remover fonte">
+                      x
+                    </button>
+                  </div>
+                </div>
+              </fieldset> -->
+              </div>
+            </fieldset>
+
+            <!-- ETAPA 5: Preview e Exportação Final -->
+            <fieldset v-show="currentStep === 5">
+              <legend>Etapa 5: Preview e Geração</legend>
+              <div class="step-content">
+                <div class="export-format-selection" style="margin-bottom:1.5rem;">
+                  <label class="export-option-label">
+                    <strong>Formato de Saída:</strong>
+                    <select v-model="exportOption" >
+                      <option value="single_pdf">PDF Único com várias páginas</option>
+                      <option value="multiple_pdfs_zip">ZIP com um PDF por página</option>
+                    </select>
+                  </label>
+                  
+                  <!-- Seleção de coluna para nome de arquivo (apenas para ZIP) -->
+                  <div v-if="exportOption === 'multiple_pdfs_zip' && activeTab === 'batch' && csvData.length > 0" 
+                       class="csv-column-select" style="margin-top: 1rem;">
+                    <label for="fileNameColumnSelect" style="font-weight: 600;">
+                      Coluna para nome do arquivo (opcional):
+                    </label>
+                    <select id="fileNameColumnSelect" v-model="fileNameColumn" style="width: 100%; margin-top: 0.25rem;">
+                      <option :value="null">-- Usar numeração automática (qr_1.pdf, qr_2.pdf...) --</option>
+                      <option v-for="col in csvPreviewColumns" :key="col" :value="col">
+                        {{ col }}
+                      </option>
+                    </select>
+                    <p class="small" style="margin-top: 0.25rem; color: #666;">
+                      Se selecionada, os PDFs terão o nome baseado nos valores desta coluna.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="preview-info-box"
+                  style="background:#f8f9fa; padding:1rem; border-radius:8px; margin-bottom:1rem;">
+                  <p style="margin:0 0 0.5rem 0;"><strong>Resumo da Configuração:</strong></p>
+                  <ul style="margin:0; padding-left:1.5rem;">
+                    <li>Modo: {{ activeTab === 'manual' ? 'Geração Manual' : 'Geração em Batch' }}</li>
+                    <li v-if="activeTab === 'batch'">Total de registros: {{ selectedCsvData.length }}</li>
+                    <li v-if="activeTab === 'manual'">Conteúdo QR: {{ manualInput.slice(0, 50) }}{{ manualInput.length >
+                      50 ? '...' : '' }}</li>
+                    <li>Tamanho da página: {{ pageSize }}{{ pageSize === 'Custom' ? ` (${customW}×${customH} pt)` : ''
+                      }}</li>
+                    <li>QR Code: {{ qrSize }}×{{ qrSize }} pt em ({{ posX }}, {{ posY }})</li>
+                    <li>Campos de texto: {{ textFields.length }}</li>
+                    <li>Campos de imagem: {{ imageFields.length }}</li>
+                  </ul>
+                </div>
+
+                <div class="config-actions" style="margin-bottom:1.5rem; display:flex; gap:0.5rem;">
+                  <button type="button" class="secondary" @click="exportConfiguration"
+                    title="Exportar todas as configurações do template">
+                    📥 Exportar Configurações
+                  </button>
+                </div>
+
+                <div v-if="templateInfo" class="template-info" style="margin-bottom:1rem;">
+                  {{ templateInfo }}
+                </div>
+
+                <div class="generation-actions">
+                  <button class="primary large-btn" type="button" @click="startGeneration"
+                    style="font-size:1.1rem; padding:0.75rem 2rem;">
+                    {{ getGenerateButtonText() }}
+                  </button>
+                  <a v-if="downloadUrl" :href="downloadUrl"
+                    :download="exportOption === 'single_pdf' ? 'qrs.pdf' : 'qrs.zip'" class="download-link">
+                    📥 Download {{ exportOption === 'single_pdf' ? 'PDF' : 'ZIP' }} ({{ urlCount }} {{ urlCount > 1 ?
+                    'páginas' : 'página' }})
+                  </a>
+                  <span class="small" v-if="status">{{ status }}</span>
+                </div>
+              </div>
+            </fieldset>
+          </form>
+
+          <!-- Preview do CSV -->
+          <div v-if="currentStep === 1 && activeTab === 'batch' && csvData.length > 0" class="csv-preview-column">
+            <h3 style="margin: 0 0 1rem 0; font-size: 1rem;">Preview do CSV</h3>
+            <div class="csv-preview-step">
+
+              <div class="csv-table-wrapper">
+                <table style="border-collapse:collapse; width:100%; min-width:400px;">
+                  <thead style="background:#fafafa;">
+                    <tr>
+                      <th v-for="col in csvPreviewColumns" :key="col"
+                        style="text-align:left; padding:6px 8px; border-bottom:1px solid #eee; min-width: 150px;">{{ col }}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(r, idx) in csvPreviewRows" :key="idx">
+                      <td v-for="col in csvPreviewColumns" :key="col + '-' + idx"
+                        style="padding:6px 8px; border-bottom:1px solid #f5f5f5;">{{ r[col] }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-if="csvPreviewRemaining > 0" class="small" style="margin-top:0.4rem; color:#666;">... e
+                mais {{
+                csvPreviewRemaining }} linhas</div>
             </div>
           </div>
-      </fieldset>
-      <!-- (button removed - moved inside loader left column to avoid duplication) -->
 
-      <div v-if="view === 'editor'">
-        <div class="editor-topbar" style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem;">
-          <button type="button" class="secondary" @click="backToLoader">← Voltar — Dados</button>
-          <h3 style="margin:0; font-size:1rem; color:#333;">Editor de Template</h3>
+          <!-- Live Preview Section (shown from step 2 onwards) -->
+          <div v-if="currentStep >= 2 && canShowLivePreview" class="preview-column">
+            <div style="display: flex; justify-content: space-between;">
+                <h3 style="margin: 0 0 1rem 0; font-size: 1rem; ">Pré-visualização em Tempo Real</h3>
+                <h1 style="margin: 0 0 1rem 0; font-size: 1rem; align-self: flex-end; padding-right: 1rem; ">[Ctrl + Rolagem do mouse] para dar zoom na página</h1>
+            </div>
+            <div class="preview-container">
+              <div class="live-preview-wrapper">
+                <iframe v-if="previewUrl" :src="previewUrl + '#toolbar=0&view=Fit'" type="application/pdf"></iframe>
+                <div v-else class="preview-placeholder">
+                  <p>A pré-visualização aparecerá aqui</p>
+                  <p class="small">Configure os dados para ver a visualização</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="template-controls-row">
-          <label class="template-control template-file">
-            Template de fundo opcional (PDF, PNG ou JPG)
-            <input
-              type="file"
-              accept="application/pdf,image/png,image/jpeg"
-              @change="handleTemplateFile"
-              ref="templateFileInput"
-            />
-          </label>
-          <label class="template-control template-rotate">
-            Rotacionar
-            <button type="button" class="rotate-btn-square" @click="rotatePage">
-              ↺
+
+      </div>
+
+      <!-- Fixed Footer Navigation -->
+      <div class="fixed-footer">
+        <div class="footer-content">
+          <div class="footer-left">
+
+            <button v-if="currentStep > 1" type="button" class="secondary" @click="prevStep">
+              ← Anterior
             </button>
-          </label>
-        </div>
-
-        <div class="page-controls-row" v-if="!state.templateType || state.templateType !== 'pdf'">
-          <label class="page-control page-size">
-            Tamanho da página
-            <select v-model="pageSize">
-              <option value="A4">A4</option>
-              <option value="Letter">Letter</option>
-              <option value="Custom">Personalizado…</option>
-            </select>
-          </label>
-          <label v-if="pageSize === 'Custom'" class="page-control page-dimension">
-            Largura (pt)
-            <input v-model.number="customW" type="number" min="100" />
-          </label>
-          <label v-if="pageSize === 'Custom'" class="page-control page-dimension">
-            Altura (pt)
-            <input v-model.number="customH" type="number" min="100" />
-          </label>
-          <label v-if="!state.templateType" class="page-control page-bg-color">
-            Cor de fundo
-            <input v-model="backgroundColor" type="color" />
-          </label>
-          <label class="page-control page-dimension">
-            Margem direita texto (pt)
-            <input v-model.number="textRightMargin" type="number" min="0" max="500" step="5" @change="generatePreview"/>
-          </label>
-        </div>
-      <fieldset>
-        <legend>Configurações do QR Code</legend>
-        
-        <!-- Basic QR Settings - Always Visible -->
-        <div class="qr-basic-settings">
-          <div class="qr-controls-row">
-                <label class="qr-control qr-size">
-                  Tamanho do QR (pt)
-                  <div style="display:flex; gap:0.5rem; align-items:center;">
-                    <input v-model.number="qrSize" type="range" min="30" :max="maxQrSize" step="1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
-                    <input v-model.number="qrSize" type="number" min="30" :max="maxQrSize" step="1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
-                    <span class="small" style="width: 30px;">pt</span>
-                  </div>
-                </label>
-                <label class="qr-control qr-position">
-                  Posição X - Esquerda (pt)
-                  <div style="display:flex; gap:0.5rem; align-items:center;">
-                    <input v-model.number="posX" type="range" min="0" :max="maxPosX" step="1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
-                    <input v-model.number="posX" type="number" min="0" :max="maxPosX" step="1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
-                    <span class="small" style="width: 30px;">pt</span>
-                  </div>
-                </label>
-                <label class="qr-control qr-position">
-                  Posição Y - Topo (pt)
-                  <div style="display:flex; gap:0.5rem; align-items:center;">
-                    <input v-model.number="posY" type="range" min="0" :max="maxPosY" step="1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
-                    <input v-model.number="posY" type="number" min="0" :max="maxPosY" step="1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
-                    <span class="small" style="width: 30px;">pt</span>
-                  </div>
-                </label>
-            <label class="qr-text-control qr-color">
-              Cor do QR Code
-              <input v-model="qrColor" type="color" />
-            </label>
-            <label class="qr-text-control qr-checkbox-wrapper">
-              <span class="checkbox-label-text">Fundo branco</span>
-              <input v-model="qrBackground" type="checkbox" class="qr-checkbox" />
-            </label>
           </div>
-          <p class="small" style="margin-top: 0.5rem;">
-            Dica: 72 pt ≈ 1 polegada; 1 mm ≈ 2.835 pt. A4 = 595×842 pt.
-          </p>
-        </div>
-
-        <!-- Advanced Settings Toggle Button -->
-        <div class="advanced-toggle">
-          <button 
-            type="button" 
-            class="advanced-toggle-btn" 
-            @click="showAdvancedQR = !showAdvancedQR"
-          >
-            {{ showAdvancedQR ? '▼' : '▶' }} Configurações Avançadas
-          </button>
-        </div>
-
-        <!-- Advanced QR Settings - Collapsible -->
-        <div v-show="showAdvancedQR" class="qr-advanced-settings">
-          <div class="qr-controls-row">
-            <label class="qr-control qr-ecc">
-              Nível ECC (Correção de Erros)
-              <select v-model="ecc">
-                <option value="L">L - Baixo (7%)</option>
-                <option value="M">M - Médio (15%)</option>
-                <option value="Q">Q - Alto (25%)</option>
-                <option value="H">H - Muito Alto (30%)</option>
-              </select>
-            </label>
-            <label class="qr-control qr-margin">
-              Zona quieta (módulos)
-              <input v-model.number="margin" type="number" min="0" />
-            </label>
+          <div class="footer-center">
+            <div class="stepper">
+              <div v-for="step in steps" :key="step.number" class="step-item" :class="{
+                'active': currentStep === step.number,
+                'completed': currentStep > step.number
+              }" @click="goToStep(step.number)">
+                <div class="step-circle">
+                  <span>{{ step.number }}</span>
+                </div>
+                <div class="step-label">{{ step.label }}</div>
+              </div>
+            </div>
           </div>
-        </div>
+          <div class="footer-right">
 
-      </fieldset>
-
-      <fieldset>
-        <legend>Campos de Texto</legend>
-        <div class="text-fields-header">
-          <p class="small">Adicione campos de texto personalizados ao PDF</p>
-          <button type="button" class="add-field-btn" @click="addTextField">
-            + Adicionar Campo de Texto
-          </button>
-        </div>
-
-        <div v-if="textFields.length === 0" class="no-fields">
-          <p class="small">Nenhum campo de texto adicionado ainda.</p>
-        </div>
-
-        <div v-for="(field, index) in textFields" :key="field.id" class="text-field-item">
-          <div class="field-header">
-            <strong>Campo {{ index + 1 }}</strong>
-            <button type="button" class="remove-field-btn" @click="removeTextField(index)">Remover</button>
-          </div>
-
-          <label>
-            Texto
-            <input v-model="field.text" :disabled="field.useColumn" type="text" placeholder="Digite o texto aqui..." />
-          </label>
-
-          <div v-if="activeTab === 'batch' && csvData.length > 0" style="margin-top:0.5rem; display:flex; gap:0.5rem; align-items:center;">
-            <label style="display:flex; align-items:center; gap:0.35rem; min-width:150px; flex-shrink:0; margin: 8px 0 8px 0;">
-              <input type="checkbox" v-model="field.useColumn" style="width: 20%;"/> Usar coluna CSV
-            </label>
-            <select v-if="field.useColumn" v-model="field.bindColumn" style="padding:4px 8px; margin-top: none;">
-              <option :value="null">-- selecione coluna --</option>
-              <option v-for="col in csvPreviewColumns" :key="col" :value="col">{{ col }}</option>
-            </select>
-            <div class="small">Ex.: {{ csvData[0] && field.bindColumn ? csvData[0][field.bindColumn] : '-' }}</div>
-          </div>
-
-            <div class="text-field-controls">
-            <label class="control-item control-flex">
-              Esquerda (pt)
-              <div style="display:flex; gap:0.5rem; align-items:center;">
-                <input v-model.number="field.x" type="range" min="0" :max="maxTextPosX" step="1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
-                <input v-model.number="field.x" type="number" min="0" :max="maxTextPosX" step="1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
-                <span class="small" style="width: 20px;">pt</span>
-              </div>
-            </label>
-            <label class="control-item control-flex">
-              Topo (pt)
-              <div style="display:flex; gap:0.5rem; align-items:center; padding: none;">
-                <input v-model.number="field.y" type="range" min="0" :max="maxTextPosY" step="1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
-                <input v-model.number="field.y" type="number" min="0" :max="maxTextPosY" step="1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
-                <span class="small" style="width: 20px;">pt</span>
-              </div>
-            </label>
-            <label class="control-item control-font">
-              Família da Fonte
-              <select v-model="field.fontFamily">
-                <optgroup label="Fontes Padrão">
-                  <option value="Helvetica">Helvetica</option>
-                  <option value="Times">Times Roman</option>
-                  <option value="Courier">Courier</option>
-                </optgroup>
-                <optgroup v-if="customFonts.length > 0" label="Fontes Carregadas">
-                  <option v-for="font in customFonts" :key="font.name" :value="font.name">{{ font.name }}</option>
-                </optgroup>
-              </select>
-            </label>
-            <label class="control-item control-font-size">
-              Tamanho (pt)
-              <div style="display:flex; gap:0.2 5rem; align-items:center;">
-                <input v-model.number="field.size" type="number" min="6" step="1" @change="generatePreview" />
-              </div>
-            </label>
-            <label class="control-item control-color">
-              Cor
-              <input v-model="field.color" type="color" />
-            </label>
-            <label class="control-item control-format">
-              Formatação
-              <div class="format-buttons">
-                <button type="button" class="format-btn" :class="{ active: field.bold }" @click="field.bold = !field.bold" title="Negrito"><strong>B</strong></button>
-                <button type="button" class="format-btn" :class="{ active: field.italic }" @click="field.italic = !field.italic" title="Itálico"><em>I</em></button>
-                <button type="button" class="format-btn" :class="{ active: field.underline }" @click="field.underline = !field.underline" title="Sublinhado"><span style="text-decoration: underline;">U</span></button>
-              </div>
-            </label>
-          </div>
-        </div>
-      </fieldset>
-
-      <fieldset>
-        <legend>Campos de Imagem</legend>
-        <div class="text-fields-header">
-          <p class="small">Adicione imagens personalizadas ao PDF</p>
-          <button type="button" class="add-field-btn" @click="addImageField">
-            + Adicionar Campo de Imagem
-          </button>
-        </div>
-
-        <div v-if="imageFields.length === 0" class="no-fields">
-          <p class="small">Nenhum campo de imagem adicionado ainda.</p>
-        </div>
-
-        <div v-for="(field, index) in imageFields" :key="field.id" class="text-field-item">
-          <div class="field-header">
-            <strong>Imagem {{ index + 1 }}</strong>
-            <button type="button" class="remove-field-btn" @click="removeImageField(index)">Remover</button>
-          </div>
-
-          <label class="template-control template-file">
-            Carregar imagem (PNG, JPG)
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/jpg"
-              @change="(e) => handleImageUpload(e, index)"
-            />
-            <span v-if="field.fileName" class="small" style="margin-top: 0.25rem; display: block;">
-              Arquivo: <strong>{{ field.fileName }}</strong> | Dimensões: {{ field.originalWidth }}×{{ field.originalHeight }}px
-            </span>
-          </label>
-
-          <div class="text-field-controls">
-            <label class="control-item control-flex">
-              Esquerda (pt)
-              <div style="display:flex; gap:0.5rem; align-items:center;">
-                <input v-model.number="field.x" type="range" min="0" :max="maxTextPosX" step="1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
-                <input v-model.number="field.x" type="number" min="0" :max="maxTextPosX" step="1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
-                <span class="small" style="width: 20px;">pt</span>
-              </div>
-            </label>
-            <label class="control-item control-flex">
-              Topo (pt)
-              <div style="display:flex; gap:0.5rem; align-items:center;">
-                <input v-model.number="field.y" type="range" min="0" :max="maxTextPosY" step="1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
-                <input v-model.number="field.y" type="number" min="0" :max="maxTextPosY" step="1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
-                <span class="small" style="width: 20px;">pt</span>
-              </div>
-            </label>
-            <label class="control-item control-flex">
-              Escala (%)
-              <div style="display:flex; gap:0.5rem; align-items:center;">
-                <input v-model.number="field.scale" type="range" min="1" max="400" step="0.1" @input="onSliderChange" @change="generatePreview" style="flex:1;" />
-                <input v-model.number="field.scale" type="number" min="1" max="400" step="0.1" @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
-                <span class="small" style="width: 20px;">%</span>
-              </div>
-            </label>
-          </div>
-        </div>
-      </fieldset>
-
-      <fieldset>
-        <legend>Fontes Customizadas</legend>
-        <p class="small" style="margin-bottom: 1rem; color: #666;">
-          Carregue arquivos de fonte .ttf ou .otf. 
-          <strong>Nota:</strong> Cada arquivo contém apenas uma variante (regular, negrito, itálico). 
-          Os botões de formatação não funcionam com fontes customizadas.
-        </p>
-
-        <div class="upload-font">
-          <label class="upload-font-btn">
-            Carregar Arquivo .ttf/.otf
-            <input 
-              type="file" 
-              accept=".ttf,.otf" 
-              @change="loadCustomFontFile"
-              style="display: none;"
-            />
-          </label>
-        </div>
-
-        <div v-if="fontLoading" class="font-loading">
-          <span class="small">Carregando fonte...</span>
-        </div>
-
-        <div v-if="fontLoadError" class="font-error">
-          <span class="small">{{ fontLoadError }}</span>
-        </div>
-
-        <div v-if="customFonts.length > 0" class="custom-fonts-list">
-          <label class="small" style="font-weight: 600; margin-bottom: 0.5rem; display: block;">
-            Fontes Carregadas ({{ customFonts.length }}):
-          </label>
-          <div 
-            v-for="(font, index) in customFonts" 
-            :key="font.name" 
-            class="custom-font-item"
-          >
-            <span class="font-name">
-              {{ font.name }}
-            </span>
-            <button 
-              type="button" 
-              class="remove-font-btn" 
-              @click="removeCustomFont(index)"
-              title="Remover fonte"
-            >
-              x
+            <button v-if="currentStep < 5" type="button" class="primary" @click="nextStep"
+              :disabled="currentStep === 1 && !canProceedFromStep1"
+              :class="{ 'disabled': currentStep === 1 && !canProceedFromStep1 }">
+              Próximo →
+            </button>
+            <button v-if="currentStep === 5" type="button" class="primary" @click="currentStep = 1">
+              Voltar ao Início
             </button>
           </div>
         </div>
-
-        <div v-else class="no-fonts">
-          <p class="small">Nenhuma fonte customizada carregada ainda.</p>
-        </div>
-      </fieldset>
-
-        <div v-if="templateInfo" class="template-info">
-          {{ templateInfo }}
-        </div>
-        <div class="config-actions">
-          <button 
-            type="button" 
-            class="secondary" 
-            @click="exportConfiguration"
-            title="Exportar todas as configurações do template"
-          >
-            📥 Exportar Configurações
-          </button>
-          <label class="secondary import-btn">
-            📤 Importar Configurações
-            <input 
-              type="file" 
-              accept=".json"
-              @change="importConfiguration"
-              style="display: none;"
-            />
-          </label>
-        </div>
-        <div class="actions" v-if="view === 'editor'">
-          <button class="primary" type="button" @click="startGeneration">
-            {{ getGenerateButtonText() }}
-          </button>
-          <a
-            v-if="downloadUrl"
-            :href="downloadUrl"
-            :download="exportOption === 'single_pdf' ? 'qrs.pdf' : 'qrs.zip'"
-          >
-            Download {{ exportOption === 'single_pdf' ? 'PDF' : 'ZIP' }} ({{ urlCount }} {{ urlCount > 1 ? 'páginas' : 'página' }}/arquivos)
-          </a>
-          <span class="small">{{ status }}</span>
-        </div>
-      </div>
-      </form>
-
-      <!-- CSV preview shown in the right column when on loader view -->
-      <div v-if="view === 'loader'" class="loader-preview-column">
-        <div v-if="csvData.length" class="csv-preview" style="margin-top:0;">
-          <div class="small" style="margin-bottom:0.5rem; display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
-            <div>Preview do CSV — mostrando primeiras {{ csvPreviewRows.length }} linhas ({{ selectedCsvData.length }} no total)</div>
-            <div style="display:flex; align-items:center; gap:0.5rem;">
-              <label class="small" style="display:flex; align-items:center; gap:0.35rem;">Mostrar
-                <select v-model.number="previewCount" style="font-size:0.9rem; padding:2px 6px;">
-                  <option :value="5">5</option>
-                  <option :value="10">10</option>
-                  <option :value="25">25</option>
-                  <option :value="50">50</option>
-                  <option :value="100">100</option>
-                </select>
-              </label>
-            </div>
-          </div>
-          <div class="csv-table-wrapper" style="overflow:auto; max-width:100%; border:1px solid #e3e3e3; border-radius:4px;">
-            <table style="border-collapse:collapse; width:100%; min-width:400px;">
-              <thead style="background:#fafafa;">
-                <tr>
-                  <th v-for="col in csvPreviewColumns" :key="col" style="text-align:left; padding:6px 8px; border-bottom:1px solid #eee;">{{ col }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(r, idx) in csvPreviewRows" :key="idx">
-                  <td v-for="col in csvPreviewColumns" :key="col + '-' + idx" style="padding:6px 8px; border-bottom:1px solid #f5f5f5;">{{ r[col] }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-if="csvPreviewRemaining > 0" class="small" style="margin-top:0.4rem; color:#666;">... e mais {{ csvPreviewRemaining }} linhas</div>
-        </div>
-        <div v-else class="csv-empty-placeholder" style="padding:1rem; color:#666;">Nenhum CSV carregado — carregue um arquivo para visualizar</div>
       </div>
 
-      <!-- Live Preview Section (only in editor view) -->
-      <div class="preview-section" v-if="view === 'editor'">
-        <h2>Pré-visualização em Tempo Real</h2>
-        <div class="preview-info">
-          <span class="small">Primeira página • Atualiza automaticamente  •  Ctrl + rolagem do mouse para zoom na página</span>
-        </div>
-        <div class="preview-container">
-          <!-- Live DOM preview: lightweight layout-only rendering for snappy feedback -->
-          <div ref="livePreviewContainer" class="live-preview-wrapper" style="width:100%; display:flex; justify-content:center;">
-            <div v-if="!canShowLivePreview" class="preview-placeholder">
-              <p>A pré-visualização aparecerá aqui</p>
-              <p class="small">Cole pelo menos uma URL ou carregue um CSV para começar</p>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
+
+    <!-- Toast Notification -->
+    <transition name="toast">
+      <div v-if="showToast" class="toast-notification" :class="toastType">
+        <span>{{ toastMessage }}</span>
+      </div>
+    </transition>
 
     <!-- Hidden holder for QR generation -->
     <div ref="qrHolder" style="position: absolute; left: -9999px; top: -9999px;"></div>
@@ -596,6 +769,9 @@ const textRightMargin = ref(40) // Margem direita para ajuste automático de tex
 
 // Template state
 const templateFileInput = ref(null)
+const templateFileName = ref('')
+const imageFileInput = ref(null)
+const imageFileName = ref('')
 const templateInfo = ref('')
 const state = ref({
   templateBytes: null,
@@ -608,6 +784,7 @@ const state = ref({
 const textFields = ref([])
 let textFieldIdCounter = 0
 const exportOption = ref('single_pdf') //para o batch
+const fileNameColumn = ref(null) // Coluna para nome de arquivo no ZIP
 
 // Image fields state
 const imageFields = ref([])
@@ -623,7 +800,9 @@ const downloadUrl = ref('')
 const urlCount = ref(0)
 const status = ref('')
 const previewUrl = ref('')
-const livePreviewContainer = ref(null)
+const toastMessage = ref('')
+const toastType = ref('success') // 'success' or 'error'
+const showToast = ref(false)
 const canShowLivePreview = computed(() => {
   // show live preview when we have at least one data source (manual or csv)
   return (
@@ -640,6 +819,58 @@ const qrHolder = ref(null)
 
 // View state: 'loader' (CSV/manual) or 'editor' (template editor)
 const view = ref('loader')
+
+// Step navigation state
+const currentStep = ref(1)
+const steps = ref([
+  { number: 1, label: 'Dados' },
+  { number: 2, label: 'Página' },
+  { number: 3, label: 'QR Code' },
+  { number: 4, label: 'Personalização' },
+  { number: 5, label: 'Exportar' }
+])
+
+// Validation for step 1
+const canProceedFromStep1 = computed(() => {
+  if (activeTab.value === 'manual') {
+    return manualInput.value && manualInput.value.trim().length > 0
+  } else {
+    return csvData.value.length > 0 && qrDataColumn.value !== null
+  }
+})
+
+// Navigation methods
+const nextStep = () => {
+  if (currentStep.value === 1 && !canProceedFromStep1.value) {
+    if (activeTab.value === 'manual') {
+      status.value = '⚠️ Digite uma URL ou texto para o QR Code antes de continuar.'
+    } else {
+      status.value = '⚠️ Carregue um arquivo CSV e selecione a coluna do QR Code antes de continuar.'
+    }
+    setTimeout(() => { status.value = '' }, 3000)
+    return
+  }
+
+  if (currentStep.value < 5) {
+    currentStep.value++
+    generatePreview() // Update preview when changing steps
+  }
+}
+
+const prevStep = () => {
+  if (currentStep.value > 1) {
+    currentStep.value--
+  }
+}
+
+const goToStep = (stepNumber) => {
+  // Only allow going back or to completed steps
+  if (stepNumber < currentStep.value) {
+    currentStep.value = stepNumber
+  } else if (stepNumber === currentStep.value + 1) {
+    nextStep()
+  }
+}
 
 const canEnterEditor = () => {
   // Require at least one URL via manual input, legacy textarea `urls`, or CSV data
@@ -689,13 +920,13 @@ function parseRangeSpec(spec, max) {
   if (!spec || String(spec).trim() === '') {
     // default: all
     for (let i = 0; i < max; i++) used.add(i)
-    return Array.from(used).sort((a,b)=>a-b)
+    return Array.from(used).sort((a, b) => a - b)
   }
 
   const s = String(spec).trim()
   if (s === '*' || s.toLowerCase() === 'all') {
     for (let i = 0; i < max; i++) used.add(i)
-    return Array.from(used).sort((a,b)=>a-b)
+    return Array.from(used).sort((a, b) => a - b)
   }
 
   const parts = s.split(',')
@@ -733,7 +964,7 @@ function parseRangeSpec(spec, max) {
     rangeError.value = ''
   }
 
-  return Array.from(used).sort((a,b)=>a-b)
+  return Array.from(used).sort((a, b) => a - b)
 }
 
 // Computed subset of CSV data based on the printing-style range spec
@@ -801,16 +1032,16 @@ const handleImageUpload = async (event, index) => {
   try {
     const field = imageFields.value[index]
     field.fileName = file.name
-    
+
     // Read as ArrayBuffer for PDF embedding
     const arrayBuffer = await file.arrayBuffer()
     field.imageBytes = new Uint8Array(arrayBuffer)
-    
+
     // Also create a data URL for preview and get dimensions
     const reader = new FileReader()
     reader.onload = (e) => {
       field.imageData = e.target.result
-      
+
       // Create temporary image to get original dimensions
       const img = new Image()
       img.onload = () => {
@@ -862,17 +1093,29 @@ const loadCustomFontFile = async (event) => {
   const file = event.target.files?.[0]
   if (!file) return
 
+  // Validate file extension
+  const validExtensions = ['.ttf', '.otf']
+  const fileName = file.name.toLowerCase()
+  const isValidExtension = validExtensions.some(ext => fileName.endsWith(ext))
+  
+  if (!isValidExtension) {
+    displayToast('Apenas arquivos .ttf ou .otf são permitidos', 'error')
+    event.target.value = '' // Clear input
+    return
+  }
+
   fontLoading.value = true
   fontLoadError.value = ''
 
   try {
     const fontBytes = await file.arrayBuffer()
     const fontName = file.name.replace(/\.(ttf|otf)$/i, '')
-    
+
     // Check if font already loaded
     if (customFonts.value.some(f => f.name === fontName)) {
-      fontLoadError.value = `Fonte "${fontName}" já foi carregada.`
+      displayToast(`Fonte "${fontName}" já foi carregada`, 'error')
       fontLoading.value = false
+      event.target.value = '' // Clear input
       return
     }
 
@@ -881,10 +1124,13 @@ const loadCustomFontFile = async (event) => {
       bytes: new Uint8Array(fontBytes)
     })
 
+    displayToast(`Fonte "${fontName}" carregada com sucesso`, 'success')
+    
     // Clear input
     event.target.value = ''
   } catch (err) {
     console.error(err)
+    displayToast('Erro ao carregar fonte: ' + err.message, 'error')
     fontLoadError.value = 'Erro ao carregar fonte: ' + err.message
   } finally {
     fontLoading.value = false
@@ -894,10 +1140,10 @@ const loadCustomFontFile = async (event) => {
 // Remove custom font
 const removeCustomFont = (index) => {
   const fontName = customFonts.value[index].name
-  
+
   // Remove from custom fonts list
   customFonts.value.splice(index, 1)
-  
+
   // Reset any text fields using this font to Helvetica
   textFields.value.forEach(field => {
     if (field.fontFamily === fontName) {
@@ -911,11 +1157,52 @@ const getGenerateButtonText = () => {
   if (activeTab.value === 'manual') {
     return 'Gerar QR Code'
   } else {
-    return exportOption.value === 'single_pdf' 
-      ? 'Gerar PDF Completo' 
+    return exportOption.value === 'single_pdf'
+      ? 'Gerar PDF Completo'
       : 'Gerar Arquivo .ZIP'
   }
 }
+
+// Show toast notification
+const displayToast = (message, type = 'success') => {
+  toastMessage.value = message
+  toastType.value = type
+  showToast.value = true
+  setTimeout(() => {
+    showToast.value = false
+  }, 4000)
+}
+
+// Helper: Convert Uint8Array to base64 safely (handles large arrays)
+const arrayToBase64 = (uint8Array) => {
+  if (!uint8Array || uint8Array.length === 0) return null
+  
+  // Processar em chunks para evitar "Maximum call stack size exceeded"
+  const CHUNK_SIZE = 8192 // 8KB por chunk
+  let binaryString = ''
+  
+  for (let i = 0; i < uint8Array.length; i += CHUNK_SIZE) {
+    const chunk = uint8Array.subarray(i, Math.min(i + CHUNK_SIZE, uint8Array.length))
+    binaryString += String.fromCharCode.apply(null, Array.from(chunk))
+  }
+  
+  return btoa(binaryString)
+}
+
+// Helper: Convert base64 to Uint8Array
+const base64ToArray = (base64String) => {
+  if (!base64String) return null
+  
+  const binaryString = atob(base64String)
+  const bytes = new Uint8Array(binaryString.length)
+  
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i)
+  }
+  
+  return bytes
+}
+
 // Export configuration to JSON file
 const exportConfiguration = () => {
   try {
@@ -928,6 +1215,12 @@ const exportConfiguration = () => {
         customWidth: customW.value,
         customHeight: customH.value,
         backgroundColor: backgroundColor.value
+      },
+      templateSettings: {
+        templateType: state.value.templateType,
+        templateBytes: arrayToBase64(state.value.templateBytes),
+        templateInfo: templateInfo.value,
+        templateFileName: templateFileName.value
       },
       qrSettings: {
         qrSize: qrSize.value,
@@ -958,7 +1251,7 @@ const exportConfiguration = () => {
       imageFields: imageFields.value.map(field => ({
         fileName: field.fileName,
         imageData: field.imageData,
-        imageBytes: field.imageBytes ? btoa(String.fromCharCode.apply(null, Array.from(field.imageBytes))) : null,
+        imageBytes: arrayToBase64(field.imageBytes),
         x: field.x,
         y: field.y,
         scale: field.scale,
@@ -968,7 +1261,7 @@ const exportConfiguration = () => {
       customFonts: customFonts.value.map(font => ({
         name: font.name,
         // Convert Uint8Array to base64 for JSON serialization
-        bytes: btoa(String.fromCharCode.apply(null, Array.from(font.bytes)))
+        bytes: arrayToBase64(font.bytes)
       })),
       exportOption: exportOption.value
     }
@@ -976,7 +1269,7 @@ const exportConfiguration = () => {
     const json = JSON.stringify(config, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
-    
+
     const a = document.createElement('a')
     a.href = url
     a.download = `qr-template-config-${Date.now()}.json`
@@ -984,14 +1277,11 @@ const exportConfiguration = () => {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    
-    status.value = 'Configuração exportada com sucesso!'
-    setTimeout(() => {
-      status.value = ''
-    }, 3000)
+
+    displayToast('✅ Configuração exportada com sucesso!', 'success')
   } catch (err) {
     console.error('Erro ao exportar configuração:', err)
-    status.value = 'Erro ao exportar configuração: ' + err.message
+    displayToast('❌ Erro ao exportar configuração: ' + err.message, 'error')
   }
 }
 
@@ -1001,12 +1291,37 @@ const importConfiguration = async (event) => {
   if (!file) return
 
   try {
-    const text = await file.text()  
+    const text = await file.text()
     const config = JSON.parse(text)
 
     // Validate version (for future compatibility)
     if (!config.version) {
       throw new Error('Arquivo de configuração inválido: versão não encontrada')
+    }
+
+    // LIMPAR TODAS AS CONFIGURAÇÕES ANTERIORES
+    // Limpar template de fundo
+    state.value = {
+      templateBytes: null,
+      templateType: null,
+      templateImage: null,
+      templatePdf: null,
+    }
+    templateInfo.value = ''
+    
+    // Limpar campos de texto
+    textFields.value = []
+    
+    // Limpar campos de imagem
+    imageFields.value = []
+    
+    // Limpar fontes customizadas
+    customFonts.value = []
+    
+    // Resetar preview
+    if (previewUrl.value) {
+      URL.revokeObjectURL(previewUrl.value)
+      previewUrl.value = ''
     }
 
     // Restore page settings
@@ -1016,6 +1331,36 @@ const importConfiguration = async (event) => {
       customW.value = config.pageSettings.customWidth || 595
       customH.value = config.pageSettings.customHeight || 842
       backgroundColor.value = config.pageSettings.backgroundColor || '#FFFFFF'
+    }
+
+    // Restore template settings
+    if (config.templateSettings && config.templateSettings.templateBytes) {
+      try {
+        state.value.templateBytes = base64ToArray(config.templateSettings.templateBytes)
+        state.value.templateType = config.templateSettings.templateType
+        templateInfo.value = config.templateSettings.templateInfo || ''
+        templateFileName.value = config.templateSettings.templateFileName || ''
+        
+        // Carregar template PDF ou imagem
+        if (state.value.templateType === 'pdf') {
+          const pdf = await PDFDocument.load(state.value.templateBytes)
+          state.value.templatePdf = pdf
+        } else if (state.value.templateType === 'image') {
+          const blob = new Blob([state.value.templateBytes])
+          const url = URL.createObjectURL(blob)
+          const img = new Image()
+          await new Promise((resolve) => {
+            img.onload = () => {
+              state.value.templateImage = img
+              URL.revokeObjectURL(url)
+              resolve()
+            }
+            img.src = url
+          })
+        }
+      } catch (templateErr) {
+        console.error('Erro ao carregar template:', templateErr)
+      }
     }
 
     // Restore QR settings
@@ -1067,17 +1412,12 @@ const importConfiguration = async (event) => {
             originalWidth: field.originalWidth || 100,
             originalHeight: field.originalHeight || 100
           }
-          
+
           // Convert base64 back to Uint8Array if available
           if (field.imageBytes) {
-            const binaryString = atob(field.imageBytes)
-            const bytes = new Uint8Array(binaryString.length)
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i)
-            }
-            imageField.imageBytes = bytes
+            imageField.imageBytes = base64ToArray(field.imageBytes)
           }
-          
+
           imageFields.value.push(imageField)
         } catch (imgErr) {
           console.error(`Erro ao carregar imagem ${field.fileName}:`, imgErr)
@@ -1091,16 +1431,14 @@ const importConfiguration = async (event) => {
       for (const font of config.customFonts) {
         try {
           // Convert base64 back to Uint8Array
-          const binaryString = atob(font.bytes)
-          const bytes = new Uint8Array(binaryString.length)
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i)
-          }
+          const bytes = base64ToArray(font.bytes)
           
-          customFonts.value.push({
-            name: font.name,
-            bytes: bytes
-          })
+          if (bytes) {
+            customFonts.value.push({
+              name: font.name,
+              bytes: bytes
+            })
+          }
         } catch (fontErr) {
           console.error(`Erro ao carregar fonte ${font.name}:`, fontErr)
         }
@@ -1115,13 +1453,14 @@ const importConfiguration = async (event) => {
     // Clear file input
     event.target.value = ''
 
-    status.value = 'Configuração importada com sucesso!'
-    setTimeout(() => {
-      status.value = ''
-    }, 3000)
+    // Regenerar preview com novas configurações
+    await generatePreview()
+
+    displayToast('✅ Configuração importada com sucesso!', 'success')
   } catch (err) {
     console.error('Erro ao importar configuração:', err)
-    status.value = 'Erro ao importar configuração: ' + err.message
+    const errorMsg = err.message || 'Arquivo inválido ou corrompido'
+    displayToast('❌ Não foi possível importar: ' + errorMsg, 'error')
     event.target.value = ''
   }
 }
@@ -1146,10 +1485,10 @@ const handleCsvUpload = (event) => {
         csvData.value = results.data; // Apenas carrega os dados
         csvFileName.value = file.name
         activeTab.value = 'batch'
-  qrDataColumn.value = null
-  // initialize range selection to full CSV (printing-style)
-  rangeSpec.value = `1-${csvData.value.length}`
-  rangeError.value = ''
+        qrDataColumn.value = null
+        // initialize range selection to full CSV (printing-style)
+        rangeSpec.value = `1-${csvData.value.length}`
+        rangeError.value = ''
 
         if (csvData.value.length > 0) {
           generatePreview()
@@ -1175,9 +1514,6 @@ const setRangeAll = () => {
 // Called on slider input for fast, debounced preview updates
 const onSliderChange = () => {
   try {
-    // immediate lightweight live preview
-    try { renderLivePreview() } catch (e) { /* ignore */ }
-
     // debounce full PDF preview
     clearTimeout(previewTimeout)
     previewTimeout = setTimeout(() => {
@@ -1201,10 +1537,25 @@ const clearCsvData = () => {
   exportOption.value = 'single_pdf';
   rangeSpec.value = ''
   rangeError.value = ''
-  
+  qrDataColumn.value = null
+  fileNameColumn.value = null
+
+  // Limpa o template
+  templateFileName.value = ''
+  state.value = {
+    templateBytes: null,
+    templateType: null,
+    templateImage: null,
+    templatePdf: null,
+  }
+  templateInfo.value = ''
+
   // Limpa o valor do input de arquivo para que o usuário possa carregar o mesmo arquivo novamente
   if (csvFileInput.value) {
     csvFileInput.value.value = null;
+  }
+  if (templateFileInput.value) {
+    templateFileInput.value.value = null;
   }
 };
 
@@ -1217,9 +1568,12 @@ const handleTemplateFile = async (event) => {
     templatePdf: null,
   }
   templateInfo.value = ''
+  templateFileName.value = ''
 
   const file = event.target.files?.[0]
   if (!file) return
+
+  templateFileName.value = file.name
 
   const buf = await file.arrayBuffer()
   state.value.templateBytes = new Uint8Array(buf)
@@ -1305,13 +1659,13 @@ watch(qrSize, (newSize, oldSize) => {
   // Only adjust if size increased and positions are now out of bounds
   if (newSize > oldSize) {
     const dims = getPageDimensions()
-    
+
     // Clamp posX to new maximum
     const newMaxX = Math.max(0, dims.width - newSize)
     if (posX.value > newMaxX) {
       posX.value = newMaxX
     }
-    
+
     // Clamp posY to new maximum
     const newMaxY = Math.max(0, dims.height - newSize)
     if (posY.value > newMaxY) {
@@ -1323,25 +1677,25 @@ watch(qrSize, (newSize, oldSize) => {
 // Watch page dimensions and adjust QR size and positions if they exceed bounds
 watch([pageSize, pageRotation, customW, customH], () => {
   const dims = getPageDimensions()
-  
+
   // Clamp QR size to new maximum (smallest dimension)
   const newMaxSize = Math.min(dims.width, dims.height)
   if (qrSize.value > newMaxSize) {
     qrSize.value = Math.max(30, newMaxSize)
   }
-  
+
   // Clamp posX to maximum
   const newMaxX = Math.max(0, dims.width - qrSize.value)
   if (posX.value > newMaxX) {
     posX.value = newMaxX
   }
-  
+
   // Clamp posY to maximum
   const newMaxY = Math.max(0, dims.height - qrSize.value)
   if (posY.value > newMaxY) {
     posY.value = newMaxY
   }
-  
+
   // Clamp text field positions to page bounds
   textFields.value.forEach(field => {
     if (field.x > dims.width) {
@@ -1351,7 +1705,7 @@ watch([pageSize, pageRotation, customW, customH], () => {
       field.y = dims.height
     }
   })
-  
+
   // Clamp image field positions to page bounds
   imageFields.value.forEach(field => {
     if (field.x > dims.width) {
@@ -1465,126 +1819,11 @@ const generateQrDataUrl = async (text, size) => {
 }
 
 // Render a lightweight DOM preview (layout-only) into the livePreviewContainer
-const renderLivePreview = async () => {
-  if (!livePreviewContainer.value) return
-  const container = livePreviewContainer.value
-  // clear existing content
-  container.innerHTML = ''
-
-  if (!canShowLivePreview.value) {
-    return
-  }
-
-  const dims = getPageDimensions()
-  const pageW = dims.width
-  const pageH = dims.height
-
-  // wrapper to center the page and allow scaling
-  const pageWrap = document.createElement('div')
-  pageWrap.style.width = pageW + 'px'
-  pageWrap.style.height = pageH + 'px'
-  pageWrap.style.position = 'relative'
-  pageWrap.style.boxShadow = '0 2px 6px rgba(0,0,0,0.12)'
-  pageWrap.style.backgroundColor = backgroundColor.value || '#fff'
-  pageWrap.style.overflow = 'hidden'
-  pageWrap.style.border = '1px solid #ddd'
-
-  // If template image is available, use it as background
-  if (state.value.templateType === 'image' && state.value.templateImage) {
-    pageWrap.style.backgroundImage = `url(${state.value.templateImage.src})`
-    pageWrap.style.backgroundSize = 'contain'
-    pageWrap.style.backgroundRepeat = 'no-repeat'
-    pageWrap.style.backgroundPosition = 'center'
-  }
-
-  container.appendChild(pageWrap)
-
-  // Determine sample data row for filling fields/QR
-  let sampleRow = null
-  if (activeTab.value === 'batch' && csvData.value.length > 0) {
-    sampleRow = selectedCsvData.value && selectedCsvData.value.length > 0 ? selectedCsvData.value[0] : csvData.value[0]
-  } else if (activeTab.value === 'manual') {
-    sampleRow = { valor: manualInput.value }
-  }
-
-  // Add QR (as an image) — generate a recolored PNG quickly
-  try {
-    const qrText = activeTab.value === 'manual' ? (manualInput.value || '') : (sampleRow ? (sampleRow[qrDataColumn.value] || '') : '')
-    if (qrText) {
-      const dataUrl = await generateQrDataUrl(qrText, Math.round(qrSize.value || 180))
-      if (dataUrl) {
-        const img = document.createElement('img')
-        img.src = dataUrl
-        img.style.position = 'absolute'
-        img.style.left = (posX.value || 0) + 'px'
-        img.style.top = (posY.value || 0) + 'px'
-        img.style.width = (qrSize.value || 180) + 'px'
-        img.style.height = (qrSize.value || 180) + 'px'
-        img.style.pointerEvents = 'none'
-        pageWrap.appendChild(img)
-      }
-    }
-  } catch (err) {
-    console.warn('Erro ao gerar QR preview:', err)
-  }
-
-  // Add image fields
-  for (const field of imageFields.value) {
-    if (field.imageData) {
-      const img = document.createElement('img')
-      img.src = field.imageData
-      img.style.position = 'absolute'
-      img.style.left = (field.x || 0) + 'px'
-      img.style.top = (field.y || 0) + 'px'
-      // Calculate dimensions based on scale (convert percentage to decimal)
-      const scaleDecimal = (field.scale || 100) / 100
-      const width = (field.originalWidth || 100) * scaleDecimal
-      const height = (field.originalHeight || 100) * scaleDecimal
-      img.style.width = width + 'px'
-      img.style.height = height + 'px'
-      img.style.pointerEvents = 'none'
-      img.style.objectFit = 'contain'
-      pageWrap.appendChild(img)
-    }
-  }
-
-  // Add text fields
-  for (const field of textFields.value) {
-    const div = document.createElement('div')
-    div.textContent = field.useColumn && sampleRow && field.bindColumn ? (sampleRow[field.bindColumn] || '') : (field.text || '')
-    div.style.position = 'absolute'
-    div.style.left = (field.x || 0) + 'px'
-    div.style.top = (field.y || 0) + 'px'
-    div.style.fontSize = (field.size || 14) + 'px'
-    div.style.color = field.color || '#000'
-    div.style.whiteSpace = 'pre-wrap'
-    div.style.pointerEvents = 'none'
-    
-    // Apply text formatting
-    if (field.bold) {
-      div.style.fontWeight = 'bold'
-    }
-    if (field.italic) {
-      div.style.fontStyle = 'italic'
-    }
-    if (field.underline) {
-      div.style.textDecoration = 'underline'
-    }
-    
-    // Apply font family
-    if (field.fontFamily) {
-      div.style.fontFamily = field.fontFamily
-    }
-    
-    pageWrap.appendChild(div)
-  }
-}
-
 
 // Auto-update preview when parameters change
 watchEffect(() => {
   // Watch all reactive values
-    const deps = [
+  const deps = [
     manualInput.value,
     urls.value,
     activeTab.value,
@@ -1606,22 +1845,31 @@ watchEffect(() => {
     qrBackground.value,
     textRightMargin.value,
     state.value.templateBytes,
-    	textFields.value.length,
-    	...textFields.value.flatMap(f => [f.text, f.x, f.y, f.size, f.fontFamily, f.bold, f.italic, f.underline, f.color, f.useColumn, f.bindColumn]),
-    	imageFields.value.length,
-    	...imageFields.value.flatMap(f => [f.imageData, f.x, f.y, f.scale]),
+    textFields.value.length,
+    ...textFields.value.flatMap(f => [f.text, f.x, f.y, f.size, f.fontFamily, f.bold, f.italic, f.underline, f.color, f.useColumn, f.bindColumn]),
+    imageFields.value.length,
+    ...imageFields.value.flatMap(f => [f.imageData, f.x, f.y, f.scale]),
     customFonts.value.length,
     ...customFonts.value.map(f => f.name)
   ]
-
-  // Render lightweight live preview immediately (fast)
-  try { renderLivePreview() } catch (e) { /* ignore */ }
 
   // Debounce the full preview generation (slower, heavy)
   clearTimeout(previewTimeout)
   previewTimeout = setTimeout(() => {
     generatePreview()
   }, 600) // Wait 600ms after last change for full PDF preview
+})
+
+// Watch to force useColumn=false when in manual mode or no CSV data
+// Only applies when user is on step 2 (text/image addition step)
+watch([activeTab, () => csvData.value.length, currentStep], () => {
+  if (currentStep.value === 2 && (activeTab.value === 'manual' || csvData.value.length === 0)) {
+    textFields.value.forEach(field => {
+      if (field.useColumn) {
+        field.useColumn = false
+      }
+    })
+  }
 })
 
 // Generate Preview (first page only)
@@ -1634,7 +1882,7 @@ const generatePreview = async () => {
     }
 
     let urlList = []
-    
+
     // Decide qual fonte de dados usar com base na aba ativa
     if (activeTab.value === 'manual') {
       // Modo manual: usa o input manual
@@ -1675,7 +1923,7 @@ const generatePreview = async () => {
       const first = src.getPages()[0]
       const baseW = first.getWidth()
       const baseH = first.getHeight()
-      
+
       // Calculate page dimensions based on rotation
       if (pageRotation.value === 90 || pageRotation.value === 270) {
         pageW = baseH
@@ -1687,7 +1935,7 @@ const generatePreview = async () => {
 
       const [embedded] = await pdfDoc.embedPdf(state.value.templateBytes, [0])
       const page = pdfDoc.addPage([pageW, pageH])
-      
+
       // Draw with rotation
       const drawOptions = {
         x: 0,
@@ -1695,10 +1943,10 @@ const generatePreview = async () => {
         width: baseW,
         height: baseH
       }
-      
+
       if (pageRotation.value !== 0) {
         drawOptions.rotate = { type: 'degrees', angle: pageRotation.value }
-        
+
         // Adjust position based on rotation
         if (pageRotation.value === 90) {
           drawOptions.x = pageW
@@ -1711,7 +1959,7 @@ const generatePreview = async () => {
           drawOptions.y = pageH
         }
       }
-      
+
       page.drawPage(embedded, drawOptions)
       await drawQrOnPage(pdfDoc, page, urlList[0], font)
       await drawImageFields(pdfDoc, page)
@@ -1729,7 +1977,7 @@ const generatePreview = async () => {
       }
 
       const page = pdfDoc.addPage([pageW, pageH])
-      
+
       // Draw background color if no template
       if (!bgBytes) {
         const hex = backgroundColor.value.replace('#', '')
@@ -1744,7 +1992,7 @@ const generatePreview = async () => {
           color: rgb(r, g, b),
         })
       }
-      
+
       if (bgBytes) {
         const png = await pdfDoc.embedPng(bgBytes)
         const dims = png.scale(Math.min(pageW / png.width, pageH / png.height))
@@ -1779,47 +2027,47 @@ const startGeneration = async () => {
   if (activeTab.value === 'manual') {
     // Modo manual: gera sempre um PDF único com uma página
     const input = manualInput.value.trim();
-    
+
     if (!input) {
       status.value = 'Erro: Insira um conteúdo para o QR Code.';
       return;
     }
-    
+
     // Sempre gera um PDF único no modo manual
     await generateSinglePDF([input]);
-    } else {
+  } else {
     // Modo batch: usa CSV e respeita a opção de exportação
     if (csvData.value.length === 0) {
       status.value = 'Erro: Carregue um arquivo CSV para geração em batch.';
       return;
     }
     if (!qrDataColumn.value) {
-    status.value = 'Erro: Por favor, selecione a coluna que contém os dados do QR Code.';
-    return;
+      status.value = 'Erro: Por favor, selecione a coluna que contém os dados do QR Code.';
+      return;
     }
-      // Use the selected CSV subset based on range controls
-      const subset = selectedCsvData.value || []
-      if (subset.length === 0) {
-        status.value = 'Erro: O intervalo selecionado não contém linhas. Verifique a seleção.'
-        return
-      }
+    // Use the selected CSV subset based on range controls
+    const subset = selectedCsvData.value || []
+    if (subset.length === 0) {
+      status.value = 'Erro: O intervalo selecionado não contém linhas. Verifique a seleção.'
+      return
+    }
 
-      if (exportOption.value === 'single_pdf') {
-        // Passa os objetos CSV (para permitir preencher campos via colunas)
-        await generateSinglePDF(subset);
-      } else if (exportOption.value === 'multiple_pdfs_zip') {
-        await generateZipWithMultiplePDFs(subset);
-      }
+    if (exportOption.value === 'single_pdf') {
+      // Passa os objetos CSV (para permitir preencher campos via colunas)
+      await generateSinglePDF(subset);
+    } else if (exportOption.value === 'multiple_pdfs_zip') {
+      await generateZipWithMultiplePDFs(subset);
+    }
   }
 }
 
 
 //funcao para criar um PDF unico
-const generateSinglePDF = async (urlList) => { 
+const generateSinglePDF = async (urlList) => {
   try {
     status.value = 'Gerando PDF único…'
     downloadUrl.value = ''
-  
+
     if (urlList.length === 0) {
       throw new Error('Nenhuma URL encontrada para gerar o PDF.')
     }
@@ -1900,7 +2148,7 @@ const generateZipWithMultiplePDFs = async (dataList) => {
     status.value = 'Iniciando geração do ZIP...'
     downloadUrl.value = ''
     const zip = new JSZip()
-    
+
     let counter = 1
     for (const item of dataList) {
       status.value = `Gerando PDF ${counter} de ${dataList.length}...`
@@ -1909,7 +2157,7 @@ const generateZipWithMultiplePDFs = async (dataList) => {
       const pdfDoc = await PDFDocument.create()
       pdfDoc.registerFontkit(fontkit)
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
-      
+
       // A lógica de criação de página é repetida aqui para cada PDF individual
       let pageW = 595, pageH = 842
       if (state.value.templateType === 'pdf') {
@@ -1927,7 +2175,7 @@ const generateZipWithMultiplePDFs = async (dataList) => {
           else if (pageRotation.value === 270) { drawOptions.y = pageH }
         }
         page.drawPage(embedded, drawOptions)
-    await drawQrOnPage(pdfDoc, page, u, font); await drawImageFields(pdfDoc, page); await drawTextFields(pdfDoc, page, item)
+        await drawQrOnPage(pdfDoc, page, u, font); await drawImageFields(pdfDoc, page); await drawTextFields(pdfDoc, page, item)
       } else {
         const dims = getPageDimensions(); pageW = dims.width; pageH = dims.height
         const page = pdfDoc.addPage([pageW, pageH])
@@ -1941,15 +2189,26 @@ const generateZipWithMultiplePDFs = async (dataList) => {
           const r = parseInt(hex.substring(0, 2), 16) / 255, g = parseInt(hex.substring(2, 4), 16) / 255, b = parseInt(hex.substring(4, 6), 16) / 255
           page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: rgb(r, g, b) })
         }
-  await drawQrOnPage(pdfDoc, page, u, font); await drawImageFields(pdfDoc, page); await drawTextFields(pdfDoc, page, item)
+        await drawQrOnPage(pdfDoc, page, u, font); await drawImageFields(pdfDoc, page); await drawTextFields(pdfDoc, page, item)
       }
 
       const pdfBytes = await pdfDoc.save()
 
-      let filename = item.nome_arquivo || `qrcode-${counter}`;
-      if (!filename.toLowerCase().endsWith('.pdf')) {
-        filename = filename.replace(/\.(png|jpe?g|gif)$/i, '') + '.pdf';
+      // Determinar o nome do arquivo
+      let filename
+      if (fileNameColumn.value && item[fileNameColumn.value]) {
+        // Usar valor da coluna selecionada
+        filename = String(item[fileNameColumn.value]).trim()
+      } else {
+        // Usar numeração automática
+        filename = `qr_${counter}`
       }
+      
+      // Garantir extensão .pdf
+      if (!filename.toLowerCase().endsWith('.pdf')) {
+        filename = filename.replace(/\.(png|jpe?g|gif)$/i, '') + '.pdf'
+      }
+      
       zip.file(filename, pdfBytes)
       counter++
     }
@@ -1980,7 +2239,7 @@ const drawImageFields = async (pdfDoc, page) => {
     try {
       let embeddedImage
       const fileName = (field.fileName || '').toLowerCase()
-      
+
       // Determine image type and embed
       if (fileName.endsWith('.png')) {
         embeddedImage = await pdfDoc.embedPng(field.imageBytes)
@@ -1999,7 +2258,7 @@ const drawImageFields = async (pdfDoc, page) => {
       const scaleDecimal = (field.scale || 100) / 100
       const width = (field.originalWidth || 100) * scaleDecimal
       const height = (field.originalHeight || 100) * scaleDecimal
-      
+
       // Calculate Y position (PDF coordinates start from bottom)
       const yPos = page.getHeight() - field.y - height
 
@@ -2100,11 +2359,11 @@ const drawTextFields = async (pdfDoc, page, dataRow = null) => {
 
     // Calculate available width (from X position to right edge of page minus right margin)
     const availableWidth = page.getWidth() - field.x - (textRightMargin.value || 0)
-    
+
     // Auto-adjust font size if text is too wide
     let adjustedSize = field.size
     let textWidth = textFont.widthOfTextAtSize(String(displayText), adjustedSize)
-    
+
     // If text exceeds available width, reduce font size iteratively
     const minFontSize = 6 // Minimum readable font size
     while (textWidth > availableWidth && adjustedSize > minFontSize) {
@@ -2152,7 +2411,7 @@ const drawQrOnPage = async (pdfDoc, page, urlText, font) => {
   qrHolder.value.appendChild(holder)
 
   const QR = resolveQRCodeCtor()
-  if(!QR){
+  if (!QR) {
     throw new Error('Biblioteca de QRCode não carregada. Verifique sua conexão ou o script CDN.')
   }
   const qr = new QR(holder, {
@@ -2166,29 +2425,29 @@ const drawQrOnPage = async (pdfDoc, page, urlText, font) => {
   await tick() // allow canvas render
 
   const canvas = holder.querySelector('canvas')
-  
+
   // Apply custom color to QR code
   const tempCanvas = document.createElement('canvas')
   tempCanvas.width = canvas.width
   tempCanvas.height = canvas.height
   const tempCtx = tempCanvas.getContext('2d')
-  
+
   // Always start with transparent canvas
   tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height)
-  
+
   // Draw original QR code
   tempCtx.drawImage(canvas, 0, 0)
-  
+
   // Get image data to change colors
   const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height)
   const data = imageData.data
-  
+
   // Parse custom QR color
   const hexColor = qrColor.value.replace('#', '')
   const r = parseInt(hexColor.substring(0, 2), 16)
   const g = parseInt(hexColor.substring(2, 4), 16)
   const b = parseInt(hexColor.substring(4, 6), 16)
-  
+
   // Replace dark modules with custom color and make the background transparent (or white)
   for (let i = 0; i < data.length; i += 4) {
     const rr = data[i]
@@ -2217,22 +2476,22 @@ const drawQrOnPage = async (pdfDoc, page, urlText, font) => {
       data[i + 3] = 255
     }
   }
-  
+
   tempCtx.putImageData(imageData, 0, 0)
-  
+
   // Manual quiet zone: draw colored canvas onto a padded canvas
   const padded = document.createElement('canvas')
   const padPx = Math.round(marginVal * (tempCanvas.width / 41)) // 41 is typical module count
   padded.width = tempCanvas.width + padPx * 2
   padded.height = tempCanvas.height + padPx * 2
   const ctx = padded.getContext('2d')
-  
+
   // Fill padding area only if background is enabled
   if (qrBackground.value) {
     ctx.fillStyle = '#fff'
     ctx.fillRect(0, 0, padded.width, padded.height)
   }
-  
+
   ctx.drawImage(tempCanvas, padPx, padPx)
 
   const dataUrl = padded.toDataURL('image/png')
@@ -2280,11 +2539,11 @@ const imageElementToPngBytes = async (img) => {
 }
 
 // Resolve construtor de QRCode considerando diferentes formatos de bundle
-function resolveQRCodeCtor(){
-  if(typeof window !== 'undefined'){
-    if(window.QRCode && typeof window.QRCode === 'function') return window.QRCode
+function resolveQRCodeCtor() {
+  if (typeof window !== 'undefined') {
+    if (window.QRCode && typeof window.QRCode === 'function') return window.QRCode
     // Algumas variantes expõem window.QRCode.QRCode
-    if(window.QRCode && typeof window.QRCode.QRCode === 'function') return window.QRCode.QRCode
+    if (window.QRCode && typeof window.QRCode.QRCode === 'function') return window.QRCode.QRCode
   }
   return null
 }
