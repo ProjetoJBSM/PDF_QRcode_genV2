@@ -709,7 +709,7 @@
 </template>
 
 <script setup>
-import { ref, watch, watchEffect, computed } from 'vue'
+import { ref, watch, watchEffect, computed, onMounted, onUnmounted } from 'vue'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import Papa from 'papaparse'
@@ -867,10 +867,33 @@ const goToStep = (stepNumber) => {
   // Only allow going back or to completed steps
   if (stepNumber < currentStep.value) {
     currentStep.value = stepNumber
-  } else if (stepNumber === currentStep.value + 1) {
+  } else if (stepNumber === stepNumber.value + 1) {
     nextStep()
   }
 }
+
+// Handle mouse button navigation (back/forward buttons)
+const handleMouseNavigation = (event) => {
+  // Button 3 = Back button (usually left side button)
+  // Button 4 = Forward button (usually right side button)
+  if (event.button === 3) {
+    event.preventDefault()
+    prevStep()
+  } else if (event.button === 4) {
+    event.preventDefault()
+    nextStep()
+  }
+}
+
+// Setup mouse button listeners on mount
+onMounted(() => {
+  window.addEventListener('mouseup', handleMouseNavigation)
+})
+
+// Cleanup on unmount
+onUnmounted(() => {
+  window.removeEventListener('mouseup', handleMouseNavigation)
+})
 
 const canEnterEditor = () => {
   // Require at least one URL via manual input, legacy textarea `urls`, or CSV data
