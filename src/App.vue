@@ -1,34 +1,39 @@
 <template>
   <div>
-    <div class="app-container">
+    <div class="app-container" :class="{ 'step1-bg': currentStep === 1 }">
+      <!-- Hero Section for Step 1 -->
+      <div v-if="currentStep === 1" class="hero-section">
+        <h1 class="hero-title">Gerador de PDFs com QR Codes</h1>
+        <p class="hero-subtitle">Ferramenta completa para criar QR codes personalizados em PDF, editar templates e gerar em lote</p>
+      </div>
+
       <!-- Stepper / Progress Indicator -->
-      <div style="margin: 1rem;">
+      <div v-if="currentStep > 1" style="margin: 1rem;">
         <h1 class="app-title">Gerador de PDFs com QR Codes</h1>
       </div>
       <!-- Main content -->
 
-      <!-- Tab entre manual e batch -->
-      <div v-if="currentStep == 1">
-        <div class="tab-navigation">
-          <button type="button" class="tab-button" :class="{ active: activeTab === 'manual' }"
-            @click="activeTab = 'manual'">
-            📝 Geração Manual
-          </button>
-          <button type="button" class="tab-button" :class="{ active: activeTab === 'batch' }"
-            @click="activeTab = 'batch'">
-            📊 Geração em Batch
-          </button>
-        </div>
-      </div>
-
       <!-- Configs principais -->
-      <div class="main-layout">
+      <div class="main-layout" :class="{ 'step1-layout': currentStep === 1 }">
         <div class="content-wrapper">
           <!-- Detalhes do CSV -->
           <form @submit.prevent class="form-section">
             <!-- ETAPA 1: Entrada de Dados (CSV/Texto) -->
-            <fieldset v-show="currentStep === 1" style="display: flex; justify-content: space-between;">
-              <legend>Etapa 1: Entrada de Dados</legend>
+            <fieldset v-show="currentStep === 1" class="step1-card">
+              
+              <!-- Tab Navigation inside card -->
+              <div class="tab-navigation">
+                <button type="button" class="tab-button" :class="{ active: activeTab === 'manual' }"
+                  @click="activeTab = 'manual'">
+                  📝 Geração Manual
+                </button>
+                <button type="button" class="tab-button" :class="{ active: activeTab === 'batch' }"
+                  @click="activeTab = 'batch'">
+                  📊 Geração em Lote
+                </button>
+              </div>
+              
+              <legend>Entrada de Dados</legend>
 
               <!-- Manual Generation Tab -->
               <div v-show="activeTab === 'manual'" class="tab-content">
@@ -140,7 +145,7 @@
                 </div>
               </div>
 
-              <div style="margin-top: 2rem; grid: 1fr 9fr; align-self: self-end;">
+              <div style="margin-top: 1.5rem; margin-bottom: 0.5rem; grid: 1fr 9fr; align-self: self-end;">
                 <label class="secondary import-btn">
                 📤 Importar Configurações
                 <input type="file" accept=".json" @change="importConfiguration" style="display: none;" />
@@ -554,7 +559,7 @@
                   style="background:#f8f9fa; padding:1rem; border-radius:8px; margin-bottom:1rem;">
                   <p style="margin:0 0 0.5rem 0;"><strong>Resumo da Configuração:</strong></p>
                   <ul style="margin:0; padding-left:1.5rem;">
-                    <li>Modo: {{ activeTab === 'manual' ? 'Geração Manual' : 'Geração em Batch' }}</li>
+                    <li>Modo: {{ activeTab === 'manual' ? 'Geração Manual' : 'Geração em Lote' }}</li>
                     <li v-if="activeTab === 'batch'">Total de registros: {{ selectedCsvData.length }}</li>
                     <li v-if="activeTab === 'manual'">Conteúdo QR: {{ manualInput.slice(0, 50) }}{{ manualInput.length >
                       50 ? '...' : '' }}</li>
