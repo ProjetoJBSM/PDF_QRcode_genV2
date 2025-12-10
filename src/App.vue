@@ -1,34 +1,39 @@
 <template>
   <div>
-    <div class="app-container">
+    <div class="app-container" :class="{ 'step1-bg': currentStep === 1 }">
+      <!-- Hero Section for Step 1 -->
+      <div v-if="currentStep === 1" class="hero-section">
+        <h1 class="hero-title">Gerador de PDFs com QR Codes</h1>
+        <p class="hero-subtitle">Ferramenta completa para criar QR codes personalizados em PDF, editar templates e gerar em lote</p>
+      </div>
+
       <!-- Stepper / Progress Indicator -->
-      <div style="margin: 1rem;">
+      <div v-if="currentStep > 1" style="margin: 1rem;">
         <h1 class="app-title">Gerador de PDFs com QR Codes</h1>
       </div>
       <!-- Main content -->
 
-      <!-- Tab entre manual e batch -->
-      <div v-if="currentStep == 1">
-        <div class="tab-navigation">
-          <button type="button" class="tab-button" :class="{ active: activeTab === 'manual' }"
-            @click="activeTab = 'manual'">
-            Geração Manual
-          </button>
-          <button type="button" class="tab-button" :class="{ active: activeTab === 'batch' }"
-            @click="activeTab = 'batch'">
-            Geração em Batch
-          </button>
-        </div>
-      </div>
-
       <!-- Configs principais -->
-      <div class="main-layout">
+      <div class="main-layout" :class="{ 'step1-layout': currentStep === 1 }">
         <div class="content-wrapper">
           <!-- Detalhes do CSV -->
           <form @submit.prevent class="form-section">
             <!-- ETAPA 1: Entrada de Dados (CSV/Texto) -->
-            <fieldset v-show="currentStep === 1" style="display: flex; justify-content: space-between;">
-              <legend>Etapa 1: Entrada de Dados</legend>
+            <fieldset v-show="currentStep === 1" class="step1-card">
+              
+              <!-- Tab Navigation inside card -->
+              <div class="tab-navigation">
+                <button type="button" class="tab-button" :class="{ active: activeTab === 'manual' }"
+                  @click="activeTab = 'manual'">
+                  📝 Geração Manual
+                </button>
+                <button type="button" class="tab-button" :class="{ active: activeTab === 'batch' }"
+                  @click="activeTab = 'batch'">
+                  📊 Geração em Lote
+                </button>
+              </div>
+              
+              <legend>Entrada de Dados</legend>
 
               <!-- Manual Generation Tab -->
               <div v-show="activeTab === 'manual'" class="tab-content">
@@ -140,7 +145,7 @@
                 </div>
               </div>
 
-              <div style="margin-top: 2rem; grid: 1fr 9fr; align-self: self-end;">
+              <div style="margin-top: 1.5rem; margin-bottom: 0.5rem; grid: 1fr 9fr; align-self: self-end;">
                 <label class="secondary import-btn">
                 📤 Importar Configurações
                 <input type="file" accept=".json" @change="importConfiguration" style="display: none;" />
@@ -296,14 +301,10 @@
             <!-- ETAPA 4: Campos de Texto e Imagens -->
             <fieldset v-show="currentStep === 4">
               <legend>Etapa 4: Personalização (Texto e Imagens)</legend>
-              <div class="step-content">
-
-                
+              <div class="step-content" style="display: block;">
 
               <!-- Campo de texto -->
-              <fieldset style="max-height: 50%; flex: 1;">
-                
-
+              <fieldset>
                 <legend>Campos de Texto</legend>
                 <div class="text-fields-header">
                   <p class="small">Adicione campos de texto personalizados ao PDF</p>
@@ -312,11 +313,10 @@
                       + Adicionar Campo de Texto
                     </button>
                     <label class="add-font-btn">
-                      <input type="file" accept=".ttf,.otf" @change="loadCustomFontFile" style="display: none; margin: 0%; padding: 0%;">
-                      + Adicionar fonte (.ttf/.otf)</input>
+                      <input type="file" accept=".ttf,.otf" @change="loadCustomFontFile" style="display: none;">
+                      + Adicionar fonte (.ttf/.otf)
                     </label>
                   </div>
-
                 </div>
 
                 <div v-if="textFields.length === 0" class="no-fields">
@@ -324,8 +324,7 @@
                 </div>
 
                 <!-- Campo unitario para texto -->
-                <div class="step-content">
-                  <div v-for="(field, index) in textFields" :key="field.id" class="text-field-item">
+                <div v-for="(field, index) in textFields" :key="field.id" class="text-field-item">
                     <div class="field-header">
                       <strong>Campo {{ index + 1 }}</strong>
                       <button type="button" class="remove-field-btn" @click="removeTextField(index)">Remover</button>
@@ -352,7 +351,8 @@
                     </div>
 
                     <!-- Ajustes do texto/coluna csv-->
-                    <div class="text-field-controls">
+                    <!-- Primeira linha: Posicionamento -->
+                    <div class="text-field-controls" style="margin-bottom: 0.75rem;">
                       <label class="control-item control-flex">
                         Esquerda (pt)
                         <div style="display:flex; gap:0.5rem; align-items:center;">
@@ -360,19 +360,23 @@
                             @input="onSliderChange" @change="generatePreview" style="flex:1;" />
                           <input v-model.number="field.x" type="number" min="0" :max="maxTextPosX" step="1"
                             @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
-                          <span class="small" style="width: 20px;">pt</span>
+                          <span class="small" style="width: 30px;">pt</span>
                         </div>
                       </label>
                       <label class="control-item control-flex">
                         Topo (pt)
-                        <div style="display:flex; gap:0.5rem; align-items:center; padding: none;">
+                        <div style="display:flex; gap:0.5rem; align-items:center;">
                           <input v-model.number="field.y" type="range" min="0" :max="maxTextPosY" step="1"
                             @input="onSliderChange" @change="generatePreview" style="flex:1;" />
                           <input v-model.number="field.y" type="number" min="0" :max="maxTextPosY" step="1"
                             @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
-                          <span class="small" style="width: 20px;">pt</span>
+                          <span class="small" style="width: 30px;">pt</span>
                         </div>
                       </label>
+                    </div>
+                    
+                    <!-- Segunda linha: Estilo do texto -->
+                    <div class="text-field-controls">
                       <label class="control-item control-font">
                         Família da Fonte
                         <select v-model="field.fontFamily">
@@ -389,9 +393,7 @@
                       </label>
                       <label class="control-item control-font-size">
                         Tamanho
-                        <div style="display:flex; gap:0.2 5rem; align-items:center;">
-                          <input v-model.number="field.size" type="number" min="6" step="1" @change="generatePreview" />
-                        </div>
+                        <input v-model.number="field.size" type="number" min="6" step="1" @change="generatePreview" />
                       </label>
                       <label class="control-item control-color">
                         Cor
@@ -411,11 +413,10 @@
                       </label>
                     </div>
                   </div>
-                </div>
               </fieldset>
 
               <!-- Campo de imagem -->
-              <fieldset style="max-height: 50%; flex: 1; ">
+              <fieldset>
                 <legend>Campos de Imagem</legend>
                 <div class="text-fields-header">
                   <p class="small">Adicione imagens personalizadas ao PDF</p>
@@ -429,8 +430,7 @@
                 </div>
 
                 <!-- Campo unitario para imagem -->
-                <div class="step-content">
-                  <div v-for="(field, index) in imageFields" :key="field.id" class="text-field-item">
+                <div v-for="(field, index) in imageFields" :key="field.id" class="text-field-item">
                     <div class="field-header">
                       <strong>Imagem {{ index + 1 }}</strong>
                       <button type="button" class="remove-field-btn" @click="removeImageField(index)">Remover</button>
@@ -467,27 +467,16 @@
                       </label>
                       <label class="control-item control-flex">
                         Topo (pt)
-                        <div style="display:flex; gap:0.5rem; align-items:center;">
-                          <input v-model.number="field.y" type="range" min="0" :max="maxTextPosY" step="1"
-                            @input="onSliderChange" @change="generatePreview" style="flex:1;" />
-                          <input v-model.number="field.y" type="number" min="0" :max="maxTextPosY" step="1"
-                            @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
-                          <span class="small" style="width: 20px;">pt</span>
-                        </div>
+                        <input v-model.number="field.y" type="number" min="0" :max="maxTextPosY" step="1"
+                          @change="generatePreview" />
                       </label>
                       <label class="control-item control-flex">
                         Escala (%)
-                        <div style="display:flex; gap:0.5rem; align-items:center;">
-                          <input v-model.number="field.scale" type="range" min="1" max="400" step="0.1"
-                            @input="onSliderChange" @change="generatePreview" style="flex:1;" />
-                          <input v-model.number="field.scale" type="number" min="1" max="400" step="0.1"
-                            @change="generatePreview" style="width: 70px; padding: 4px 8px;" />
-                          <span class="small" style="width: 20px;">%</span>
-                        </div>
+                        <input v-model.number="field.scale" type="number" min="1" max="400" step="0.1"
+                          @change="generatePreview" />
                       </label>
                     </div>
                   </div>
-                </div>
               </fieldset>
 
               <!-- Campo de fontes custom -->
@@ -570,7 +559,7 @@
                   style="background:#f8f9fa; padding:1rem; border-radius:8px; margin-bottom:1rem;">
                   <p style="margin:0 0 0.5rem 0;"><strong>Resumo da Configuração:</strong></p>
                   <ul style="margin:0; padding-left:1.5rem;">
-                    <li>Modo: {{ activeTab === 'manual' ? 'Geração Manual' : 'Geração em Batch' }}</li>
+                    <li>Modo: {{ activeTab === 'manual' ? 'Geração Manual' : 'Geração em Lote' }}</li>
                     <li v-if="activeTab === 'batch'">Total de registros: {{ selectedCsvData.length }}</li>
                     <li v-if="activeTab === 'manual'">Conteúdo QR: {{ manualInput.slice(0, 50) }}{{ manualInput.length >
                       50 ? '...' : '' }}</li>
@@ -582,10 +571,17 @@
                   </ul>
                 </div>
 
-                <div class="config-actions" style="margin-bottom:1.5rem; display:flex; gap:0.5rem;">
+                <div class="config-actions" style="margin-bottom:1.5rem; display:flex; gap:0.5rem; flex-wrap: wrap;">
                   <button type="button" class="secondary" @click="exportConfiguration"
                     title="Exportar todas as configurações do template">
                     📥 Exportar Configurações
+                  </button>
+                  <button class="primary large-btn" type="button" @click="startGeneration"
+                    :disabled="isGenerating"
+                    style="font-size:1.1rem; padding:0.75rem 2rem; min-width: 200px;">
+                    <span v-if="isGenerating" class="loading-spinner" style="display: inline-block; margin-right: 0.5rem;"></span>
+                    <span v-if="isGenerating">Gerando...</span>
+                    <span v-else>{{ getGenerateButtonText() }}</span>
                   </button>
                 </div>
 
@@ -593,17 +589,12 @@
                   {{ templateInfo }}
                 </div>
 
-                <div class="generation-actions">
-                  <button class="primary large-btn" type="button" @click="startGeneration"
-                    style="font-size:1.1rem; padding:0.75rem 2rem;">
-                    {{ getGenerateButtonText() }}
-                  </button>
-                  <a v-if="downloadUrl" :href="downloadUrl"
+                <div v-if="downloadUrl" class="generation-actions">
+                  <a :href="downloadUrl"
                     :download="exportOption === 'single_pdf' ? 'qrs.pdf' : 'qrs.zip'" class="download-link">
                     📥 Download {{ exportOption === 'single_pdf' ? 'PDF' : 'ZIP' }} ({{ urlCount }} {{ urlCount > 1 ?
                     'páginas' : 'página' }})
                   </a>
-                  <span class="small" v-if="status">{{ status }}</span>
                 </div>
               </div>
             </fieldset>
@@ -674,7 +665,9 @@
                 'completed': currentStep > step.number
               }" @click="goToStep(step.number)">
                 <div class="step-circle">
-                  <span>{{ step.number }}</span>
+                  <span v-if="currentStep > step.number">✓</span>
+                  <span v-else-if="currentStep === step.number && step.icon" v-html="step.icon"></span>
+                  <span v-else>{{ step.number }}</span>
                 </div>
                 <div class="step-label">{{ step.label }}</div>
               </div>
@@ -803,6 +796,7 @@ const previewUrl = ref('')
 const toastMessage = ref('')
 const toastType = ref('success') // 'success' or 'error'
 const showToast = ref(false)
+const isGenerating = ref(false)
 const canShowLivePreview = computed(() => {
   // show live preview when we have at least one data source (manual or csv)
   return (
@@ -823,11 +817,11 @@ const view = ref('loader')
 // Step navigation state
 const currentStep = ref(1)
 const steps = ref([
-  { number: 1, label: 'Dados' },
-  { number: 2, label: 'Página' },
-  { number: 3, label: 'QR Code' },
-  { number: 4, label: 'Personalização' },
-  { number: 5, label: 'Exportar' }
+  { number: 1, label: 'Dados', icon: '📊' },
+  { number: 2, label: 'Página', icon: '📄' },
+  { number: 3, label: 'QR Code', icon: '⚡' },
+  { number: 4, label: 'Personalização', icon: '🎨' },
+  { number: 5, label: 'Exportar', icon: '🚀' }
 ])
 
 // Validation for step 1
@@ -853,6 +847,7 @@ const nextStep = () => {
 
   if (currentStep.value < 5) {
     currentStep.value++
+    updateProgressBar()
     generatePreview() // Update preview when changing steps
   }
 }
@@ -860,6 +855,7 @@ const nextStep = () => {
 const prevStep = () => {
   if (currentStep.value > 1) {
     currentStep.value--
+    updateProgressBar()
   }
 }
 
@@ -867,8 +863,18 @@ const goToStep = (stepNumber) => {
   // Only allow going back or to completed steps
   if (stepNumber < currentStep.value) {
     currentStep.value = stepNumber
+    updateProgressBar()
   } else if (stepNumber === stepNumber.value + 1) {
     nextStep()
+  }
+}
+
+// Update progress bar animation
+const updateProgressBar = () => {
+  const progressPercentage = ((currentStep.value - 1) / (steps.value.length - 1)) * 100
+  const progressBar = document.querySelector('.stepper::after')
+  if (progressBar) {
+    progressBar.style.width = `${progressPercentage * 0.85}%`
   }
 }
 
@@ -888,6 +894,12 @@ const handleMouseNavigation = (event) => {
 // Setup mouse button listeners on mount
 onMounted(() => {
   window.addEventListener('mouseup', handleMouseNavigation)
+  updateProgressBar()
+  
+  // Watch for step changes to update progress bar
+  watch(currentStep, () => {
+    updateProgressBar()
+  })
 })
 
 // Cleanup on unmount
@@ -2043,11 +2055,13 @@ const generatePreview = async () => {
 
 //funcao para organizar a geracao do PDF
 const startGeneration = async () => {
+  isGenerating.value = true
   status.value = '⏳ Iniciando...'
   downloadUrl.value = ''
 
-  // Lógica diferente para cada aba
-  if (activeTab.value === 'manual') {
+  try {
+    // Lógica diferente para cada aba
+    if (activeTab.value === 'manual') {
     // Modo manual: gera sempre um PDF único com uma página
     const input = manualInput.value.trim();
 
@@ -2081,6 +2095,13 @@ const startGeneration = async () => {
     } else if (exportOption.value === 'multiple_pdfs_zip') {
       await generateZipWithMultiplePDFs(subset);
     }
+  }
+  } catch (error) {
+    console.error('Erro na geração:', error)
+    status.value = '❌ Erro ao gerar: ' + error.message
+    displayToast('Erro ao gerar PDF: ' + error.message, 'error')
+  } finally {
+    isGenerating.value = false
   }
 }
 
